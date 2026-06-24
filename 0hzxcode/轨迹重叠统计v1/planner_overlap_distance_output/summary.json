@@ -1,0 +1,20 @@
+{
+  "simulation_log_root": "/home/ubuntu/code/hezexiang/Diffusion-Planner/exp/exp/simulation/closed_loop_nonreactive_agents/diffusion_planner/val14/diffusion_planner_release/model_2026-06-15-16-34-20",
+  "num_logs_found": 1118,
+  "num_distance_points": 13009581,
+  "pair_stride": 1,
+  "pose": "rear_axle",
+  "include_current": false,
+  "distance_m": {
+    "count": 13009581,
+    "mean": 0.48721254767762423,
+    "std": 1.210639498428631,
+    "min": 2.556264220424148e-06,
+    "p50": 0.14484756834364315,
+    "p75": 0.5015541291594365,
+    "p90": 1.2086011826385585,
+    "p95": 1.932273935711983,
+    "p99": 4.765475351871265,
+    "max": 66.70562822476067
+  }
+}

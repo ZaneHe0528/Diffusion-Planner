@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1
 export HYDRA_FULL_ERROR=1
 
 ###################################
@@ -16,24 +16,26 @@ export NUPLAN_MAPS_ROOT="/home/ubuntu/data/hezexiang/nuplan/dataset/maps"
 export NUPLAN_EXP_ROOT="/home/ubuntu/code/hezexiang/Diffusion-Planner/exp"
 
 
-# Dataset split to use
+# Dataset split to use  选择场景集
 # Options: 
 #   - "test14-random"
 #   - "test14-hard"
 #   - "val14"
-SPLIT="REPLACE_WITH_SPLIT"  # e.g., "val14"
+SPLIT="val14"  # e.g., "val14"
 
-# Challenge type
+# Challenge type。 NR 和 R 是仿真模式，三个场景集都有NR和R
 # Options: 
 #   - "closed_loop_nonreactive_agents"
 #   - "closed_loop_reactive_agents"
-CHALLENGE="REPLACE_WITH_CHALLENGE"  # e.g., "closed_loop_nonreactive_agents"
+CHALLENGE="closed_loop_nonreactive_agents"  # e.g., "closed_loop_nonreactive_agents"
 ###################################
 
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 BRANCH_NAME=diffusion_planner_release
-ARGS_FILE=./checkpoints/args.json
-CKPT_FILE=./checkpoints/model.pth
+ARGS_FILE="$SCRIPT_DIR/checkpoints/args.json"
+CKPT_FILE="$SCRIPT_DIR/checkpoints/model.pth"
 
 if [ "$SPLIT" == "val14" ]; then
     SCENARIO_BUILDER="nuplan"
@@ -56,7 +58,8 @@ python $NUPLAN_DEVKIT_ROOT/nuplan/planning/script/run_simulation.py \
     experiment_uid=$PLANNER/$SPLIT/$BRANCH_NAME/${FILENAME_WITHOUT_EXTENSION}_$(date "+%Y-%m-%d-%H-%M-%S") \
     verbose=true \
     worker=ray_distributed \
-    worker.threads_per_node=128 \
+    # worker.threads_per_node=128 \ 
+    worker.threads_per_node=6 \     
     distributed_mode='SINGLE_NODE' \
     number_of_gpus_allocated_per_simulation=0.15 \
     enable_simulation_progress_bar=true \

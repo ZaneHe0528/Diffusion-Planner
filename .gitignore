@@ -11,4 +11,4 @@ exp/
 cache/
 checkpoints/
 dataset
-nuplan-devkit/
+*.csv
