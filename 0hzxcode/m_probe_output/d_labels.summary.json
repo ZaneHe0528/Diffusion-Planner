@@ -1,0 +1,10 @@
+{
+  "input": "0hzxcode/adjacent_traj_l2_output/per_pair_overlap_l2.csv",
+  "output": "0hzxcode/m_probe_output/d_labels.csv",
+  "d_column": "perstep_max_m",
+  "rows_read": 165688,
+  "rows_written": 165688,
+  "skipped_unaligned": 0,
+  "sample_id_format": "<log_name>__<scenario_name>__iter_<new_iteration:06d>",
+  "note": "sample_id identifies closed-loop log frames, not exp/cache/mini .npz filenames."
+}

@@ -67,7 +67,7 @@ if __name__ == "__main__":
     builder = NuPlanScenarioBuilder(args.data_path, args.map_path, sensor_root, db_files, map_version)
     scenario_filter = ScenarioFilter(*get_filter_parameters(args.scenarios_per_type, args.total_scenarios, args.shuffle_scenarios, log_names=log_names))
 
-    worker = SingleMachineParallelExecutor(use_process_pool=True)
+    worker = SingleMachineParallelExecutor(use_process_pool=True, max_workers=32)
     scenarios = builder.get_scenarios(scenario_filter, worker)
     print(f"Total number of scenarios: {len(scenarios)}")
 
