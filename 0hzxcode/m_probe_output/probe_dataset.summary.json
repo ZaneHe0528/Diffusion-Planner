@@ -1,0 +1,18 @@
+{
+  "labels_csv": "0hzxcode/m_probe_output/d_labels.csv",
+  "output": "0hzxcode/m_probe_output/probe_dataset.npz",
+  "data_path": "/home/ubuntu/data/hezexiang/nuplan/dataset/nuplan-v1.1/trainval",
+  "map_path": "/home/ubuntu/data/hezexiang/nuplan/dataset/maps",
+  "device": "cpu",
+  "history_size": 21,
+  "scenario_worker": "sequential",
+  "num_workers": 1,
+  "unsafe_cuda_db_export": false,
+  "chunk_size_scenarios": 5,
+  "input_label_rows": 165688,
+  "input_scenarios": 1118,
+  "failed_chunks": [],
+  "num_failed_chunks": 0,
+  "rows_exported": 144441,
+  "chunks_merged": 263
+}

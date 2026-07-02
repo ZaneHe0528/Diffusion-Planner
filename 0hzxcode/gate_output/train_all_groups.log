@@ -1,0 +1,48 @@
+loaded 144446 rows from 224 chunks, 1118 scenarios
+redundancy downsample: train 101036 -> 89001
+hard_threshold(P90)=2.650 m, level_edges=[0.525, 1.62, 4.062] m
+train level 分布: [44500, 26700, 13350, 4451]
+enabled groups: ['ego_history', 'neighbor_agents', 'route_lanes', 'lanes', 'static_objects']
+gate parameters: 0.231 M
+epoch   1 loss=1.5643 val_spearman=0.5992 val_auroc=0.6811 val_acc=0.5135 (0.1 min)
+epoch   2 loss=1.5095 val_spearman=0.6003 val_auroc=0.6910 val_acc=0.4787 (0.2 min)
+epoch   3 loss=1.4743 val_spearman=0.5927 val_auroc=0.6983 val_acc=0.4974 (0.3 min)
+epoch   4 loss=1.4585 val_spearman=0.6068 val_auroc=0.6986 val_acc=0.4817 (0.4 min)
+epoch   5 loss=1.4391 val_spearman=0.6012 val_auroc=0.7038 val_acc=0.4544 (0.4 min)
+epoch   6 loss=1.4254 val_spearman=0.6120 val_auroc=0.7027 val_acc=0.4253 (0.5 min)
+epoch   7 loss=1.4122 val_spearman=0.5869 val_auroc=0.7013 val_acc=0.4836 (0.6 min)
+epoch   8 loss=1.4026 val_spearman=0.5812 val_auroc=0.6936 val_acc=0.4621 (0.7 min)
+epoch   9 loss=1.3932 val_spearman=0.5814 val_auroc=0.7034 val_acc=0.4651 (0.8 min)
+epoch  10 loss=1.3799 val_spearman=0.5609 val_auroc=0.6842 val_acc=0.4443 (0.9 min)
+epoch  11 loss=1.3726 val_spearman=0.5675 val_auroc=0.7022 val_acc=0.4436 (1.0 min)
+epoch  12 loss=1.3654 val_spearman=0.5671 val_auroc=0.7012 val_acc=0.4497 (1.1 min)
+epoch  13 loss=1.3570 val_spearman=0.5613 val_auroc=0.6970 val_acc=0.4289 (1.2 min)
+epoch  14 loss=1.3551 val_spearman=0.5791 val_auroc=0.7001 val_acc=0.4247 (1.3 min)
+epoch  15 loss=1.3472 val_spearman=0.5790 val_auroc=0.6998 val_acc=0.4736 (1.4 min)
+epoch  16 loss=1.3349 val_spearman=0.5776 val_auroc=0.7030 val_acc=0.4498 (1.5 min)
+epoch  17 loss=1.3346 val_spearman=0.5759 val_auroc=0.7066 val_acc=0.4477 (1.5 min)
+epoch  18 loss=1.3240 val_spearman=0.5782 val_auroc=0.7064 val_acc=0.4720 (1.6 min)
+epoch  19 loss=1.3174 val_spearman=0.5722 val_auroc=0.7062 val_acc=0.4560 (1.7 min)
+epoch  20 loss=1.3117 val_spearman=0.5767 val_auroc=0.7027 val_acc=0.4370 (1.8 min)
+epoch  21 loss=1.3070 val_spearman=0.5859 val_auroc=0.7092 val_acc=0.4606 (1.9 min)
+epoch  22 loss=1.2977 val_spearman=0.5531 val_auroc=0.7092 val_acc=0.4441 (2.0 min)
+epoch  23 loss=1.2945 val_spearman=0.5841 val_auroc=0.7080 val_acc=0.4627 (2.1 min)
+epoch  24 loss=1.2881 val_spearman=0.5760 val_auroc=0.7070 val_acc=0.4613 (2.2 min)
+epoch  25 loss=1.2846 val_spearman=0.5818 val_auroc=0.7079 val_acc=0.4801 (2.4 min)
+epoch  26 loss=1.2781 val_spearman=0.5676 val_auroc=0.7106 val_acc=0.4679 (2.5 min)
+epoch  27 loss=1.2767 val_spearman=0.5902 val_auroc=0.7078 val_acc=0.4637 (2.6 min)
+epoch  28 loss=1.2697 val_spearman=0.5769 val_auroc=0.7112 val_acc=0.4587 (2.7 min)
+epoch  29 loss=1.2672 val_spearman=0.5730 val_auroc=0.7041 val_acc=0.4693 (2.8 min)
+epoch  30 loss=1.2607 val_spearman=0.5745 val_auroc=0.7068 val_acc=0.4694 (3.0 min)
+epoch  31 loss=1.2568 val_spearman=0.5757 val_auroc=0.7086 val_acc=0.4617 (3.1 min)
+epoch  32 loss=1.2538 val_spearman=0.5777 val_auroc=0.7116 val_acc=0.4669 (3.3 min)
+epoch  33 loss=1.2527 val_spearman=0.5807 val_auroc=0.7086 val_acc=0.4699 (3.4 min)
+epoch  34 loss=1.2477 val_spearman=0.5724 val_auroc=0.7099 val_acc=0.4685 (3.6 min)
+epoch  35 loss=1.2460 val_spearman=0.5786 val_auroc=0.7095 val_acc=0.4699 (3.7 min)
+epoch  36 loss=1.2430 val_spearman=0.5762 val_auroc=0.7104 val_acc=0.4681 (3.9 min)
+epoch  37 loss=1.2416 val_spearman=0.5788 val_auroc=0.7101 val_acc=0.4660 (4.0 min)
+epoch  38 loss=1.2416 val_spearman=0.5737 val_auroc=0.7115 val_acc=0.4654 (4.2 min)
+epoch  39 loss=1.2427 val_spearman=0.5758 val_auroc=0.7110 val_acc=0.4689 (4.4 min)
+epoch  40 loss=1.2385 val_spearman=0.5776 val_auroc=0.7105 val_acc=0.4695 (4.5 min)
+best epoch = 6, val_spearman = 0.6120
+wrote: 0hzxcode/gate_output/runs/all_groups/metrics.json, importance_report.md, plots

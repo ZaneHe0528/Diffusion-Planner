@@ -1,0 +1,148 @@
+{
+  "data": {
+    "num_rows": 144441,
+    "encoding_dim": 192,
+    "ego_feature_dim": 8,
+    "num_scenarios": 1118,
+    "split_rows": {
+      "train": 101031,
+      "val": 21715,
+      "test": 21695
+    },
+    "target_d": {
+      "mean": 1.1195835992067016,
+      "std": 2.2520133335803116,
+      "p50": 0.4939989149570465,
+      "p90": 2.6052491664886475,
+      "p95": 4.015982151031494,
+      "max": 67.76886749267578
+    },
+    "hard_threshold": 2.6307363510131836,
+    "hard_positive_rate": 0.09857311982054957
+  },
+  "feature_sets": {
+    "encoding": {
+      "name": "encoding",
+      "ridge_alpha": 100.0,
+      "regression": {
+        "train": {
+          "rmse": 2.233608585349085,
+          "mae": 0.870645888509381,
+          "pearson": 0.24676529100741834,
+          "spearman": 0.5900723011948262
+        },
+        "val": {
+          "rmse": 2.0583923003393503,
+          "mae": 0.8410579791881876,
+          "pearson": 0.24169174788310846,
+          "spearman": 0.559604779077431
+        },
+        "test": {
+          "rmse": 2.2482997994129685,
+          "mae": 0.8747056056405881,
+          "pearson": 0.26107712523934185,
+          "spearman": 0.624969299211749
+        }
+      },
+      "classification": {
+        "train": {
+          "auroc": 0.6988104473378712,
+          "average_precision": 0.1823181346359648,
+          "threshold": 0.2545952796936035,
+          "hard_recall": 0.9769375433039691,
+          "hard_precision": 0.1230274474609229,
+          "false_easy_rate": 0.02306245669603088,
+          "easy_recall": 0.22624494105226112
+        },
+        "val": {
+          "auroc": 0.6625643514254611,
+          "average_precision": 0.14260395483835703,
+          "threshold": 0.2545952796936035,
+          "hard_recall": 0.9503968253968254,
+          "hard_precision": 0.11258005758270169,
+          "false_easy_rate": 0.0496031746031746,
+          "easy_recall": 0.23331133560079192
+        },
+        "test": {
+          "auroc": 0.6742272900931556,
+          "average_precision": 0.15391331290356686,
+          "threshold": 0.2545952796936035,
+          "hard_recall": 0.951864086833412,
+          "hard_precision": 0.1264338995800163,
+          "false_easy_rate": 0.04813591316658802,
+          "easy_recall": 0.28810788720882713
+        }
+      }
+    },
+    "ego_features": {
+      "name": "ego_features",
+      "ridge_alpha": 0.1,
+      "regression": {
+        "train": {
+          "rmse": 2.307572817155604,
+          "mae": 0.987659274685695,
+          "pearson": 0.0,
+          "spearman": 0.0
+        },
+        "val": {
+          "rmse": 2.122594993731546,
+          "mae": 0.9404325757261462,
+          "pearson": 0.0,
+          "spearman": 0.0
+        },
+        "test": {
+          "rmse": 2.3212881913134478,
+          "mae": 1.0185430133701938,
+          "pearson": 0.0,
+          "spearman": 0.0
+        }
+      },
+      "classification": {
+        "train": {
+          "auroc": 0.5,
+          "average_precision": 0.10891182428144963,
+          "threshold": 0.5000000596046448,
+          "hard_recall": 1.0,
+          "hard_precision": 0.09999901020478863,
+          "false_easy_rate": 0.0,
+          "easy_recall": 0.0
+        },
+        "val": {
+          "auroc": 0.5,
+          "average_precision": 0.11128584494123832,
+          "threshold": 0.5000000596046448,
+          "hard_recall": 1.0,
+          "hard_precision": 0.09283905134699516,
+          "false_easy_rate": 0.0,
+          "easy_recall": 0.0
+        },
+        "test": {
+          "auroc": 0.5,
+          "average_precision": 0.09267740569024757,
+          "threshold": 0.5000000596046448,
+          "hard_recall": 1.0,
+          "hard_precision": 0.09767227471767688,
+          "false_easy_rate": 0.0,
+          "easy_recall": 0.0
+        }
+      }
+    }
+  },
+  "decision": {
+    "pass": false,
+    "recommendation": "STOP: keep fixed t_s warm-start; do not train learned gate yet",
+    "checks": {
+      "spearman_ok": true,
+      "auroc_ok": false,
+      "hard_recall_ok": true,
+      "rmse_improvement_vs_ego": 0.03144305484067467,
+      "rmse_improvement_ok": false
+    },
+    "thresholds": {
+      "min_rmse_improvement": 0.15,
+      "min_spearman": 0.3,
+      "min_auroc": 0.7,
+      "min_hard_recall": 0.85
+    }
+  }
+}

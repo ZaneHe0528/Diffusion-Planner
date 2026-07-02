@@ -33,16 +33,15 @@ conda activate dp
 `0hzxcode/m_probe/` 中包含：
 
 - `make_d_labels_from_adjacent_traj_l2.py`  
-  把 `adjacent_traj_l2_output/per_pair_overlap_l2.csv` 转成 `d_labels.csv`。
-
+把 `adjacent_traj_l2_output/per_pair_overlap_l2.csv` 转成 `d_labels.csv`。
 - `make_probe_dataset.py`  
-  从已处理 `.npz` 输入缓存导出 encoder mean-pool 后的 `encoding` 和 ego 运动学特征，并与 `d_labels.csv` 按 `sample_id` 合并。
-
+从已处理 `.npz` 输入缓存导出 encoder mean-pool 后的 `encoding` 和 ego 运动学特征，并与 `d_labels.csv` 按 `sample_id` 合并。
 - `make_probe_dataset_from_val14_logs.py`  
-  直接读取 val14 simulation log，按 `d_labels.csv` 里的同一批 `sample_id` 重建 planner 输入，导出 `(encoding, d, ego_features)`。
-
+直接读取 val14 simulation log，按 `d_labels.csv` 里的同一批 `sample_id` 重建 planner 输入，导出 `(encoding, d, ego_features)`。
 - `run_encoding_d_probe.py`  
-  在 `probe_dataset.npz` 上跑 Ridge 回归和 hard/easy logistic probe，输出 `probe_report.md` 与 `probe_results.json`。
+在 `probe_dataset.npz` 上跑 Ridge 回归和 hard/easy logistic probe，输出 `probe_report.md` 与 `probe_results.json`。
+
+
 
 ## 数据契约
 
@@ -224,6 +223,38 @@ d
   --max-samples 5000
 ```
 
+
+
+
+
+### 推荐方式：从 val14 DB 导出 encoding
+
+不要从 `simulation_log/*.msgpack.xz` 导出 encoding`SimulationLog.load_data()` 会 unpickle planner / torch / CUDA 相关对象，全量时可能触发 native 崩溃：
+
+```text
+
+free(): double free detected in tcache 2
+
+改用 val14 原始 *.db 场景数据重建同一批帧的 planner 输入：
+
+/home/ubuntu/anaconda3/envs/dp/bin/python 0hzxcode/m_probe/make_probe_dataset_from_val14_db.py \
+  --labels-csv 0hzxcode/m_probe_output/d_labels.csv \
+  --data-path /home/ubuntu/data/hezexiang/nuplan/dataset/nuplan-v1.1/trainval \
+  --map-path /home/ubuntu/data/hezexiang/nuplan/dataset/maps \
+  --checkpoint checkpoints/model.pth \
+  --config checkpoints/args.json \
+  --output 0hzxcode/m_probe_output/probe_dataset.npz \
+  --device cpu \
+  --scenario-worker sequential \
+  --num-workers 1 \
+  --chunk-size-scenarios 5
+
+导出完成后跑：
+/home/ubuntu/anaconda3/envs/dp/bin/python 0hzxcode/m_probe/run_encoding_d_probe.py \
+  --input 0hzxcode/m_probe_output/probe_dataset.npz \
+  --output-dir 0hzxcode/m_probe_output
+
+
 ## Step 3：运行 M-probe
 
 有了真实对齐的 `probe_dataset.npz` 后运行：
@@ -260,6 +291,8 @@ hard = d > train split 的 d P90
 --hard-threshold 3.0
 ```
 
+
+
 ## PASS / FAIL 标准
 
 默认通过条件：
@@ -283,6 +316,8 @@ GO: train the learned gate
 STOP: keep fixed t_s warm-start; do not train learned gate yet
 ```
 
+
+
 ## 结果解读
 
 重点看 `probe_report.md` 的 test metrics：
@@ -298,7 +333,11 @@ STOP: keep fixed t_s warm-start; do not train learned gate yet
 - `encoding` 的 AUROC/AP 应优于 ego 运动学；
 - `false easy` 越低越好，因为 hard 帧误判为 easy 会让低 `t_s` 太激进。
 
+
+
 ## 常见错误
+
+
 
 ### 1. labels CSV not found
 

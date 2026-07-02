@@ -1,0 +1,325 @@
+{
+  "data": {
+    "rows": 144446,
+    "scenarios": 1118,
+    "split_rows": {
+      "train": 89001,
+      "val": 21715,
+      "test": 21695
+    },
+    "hard_threshold_m": 2.650489568710327,
+    "level_edges_m": [
+      0.5246983766555786,
+      1.620180368423462,
+      4.0617570877075195
+    ],
+    "enabled_groups": [
+      "ego_history",
+      "neighbor_agents",
+      "route_lanes",
+      "lanes",
+      "static_objects",
+      "prev_d"
+    ],
+    "parameters": 241285
+  },
+  "splits": {
+    "train": {
+      "regression": {
+        "rmse": 2.1103110313415527,
+        "mae": 0.7788958549499512,
+        "pearson": 0.4545916521530466,
+        "spearman": 0.7190963535752395,
+        "rmse_log1p": 0.41851603984832764
+      },
+      "classification": {
+        "accuracy": 0.5266232963674565,
+        "adjacent_accuracy": 0.8777654183660858,
+        "macro_f1": 0.4615604761306277,
+        "per_level_recall": [
+          0.5695955056179776,
+          0.4894007490636704,
+          0.4546067415730337,
+          0.5362839811278365
+        ],
+        "per_level_precision": [
+          0.9181699630515106,
+          0.43996632996632995,
+          0.2767820495279792,
+          0.24436936936936937
+        ],
+        "top_level_recall": 0.5362839811278365,
+        "confusion": [
+          [
+            25347,
+            12030,
+            5404,
+            1719
+          ],
+          [
+            1811,
+            13067,
+            9084,
+            2738
+          ],
+          [
+            324,
+            4033,
+            6069,
+            2924
+          ],
+          [
+            124,
+            570,
+            1370,
+            2387
+          ]
+        ]
+      },
+      "hard": {
+        "auroc": 0.8230237211756113,
+        "hard_recall": 0.9566292134831461,
+        "hard_precision": 0.15297816907735154,
+        "false_easy_rate": 0.04337078651685393,
+        "positive_rate": 0.09999887641711891,
+        "score_threshold": 0.6484185457229614
+      }
+    },
+    "val": {
+      "regression": {
+        "rmse": 1.9243323802947998,
+        "mae": 0.7446441054344177,
+        "pearson": 0.4527082032104787,
+        "spearman": 0.7110427292739857,
+        "rmse_log1p": 0.4149201512336731
+      },
+      "classification": {
+        "accuracy": 0.5130554915956712,
+        "adjacent_accuracy": 0.8833525212986415,
+        "macro_f1": 0.4336279419482052,
+        "per_level_recall": [
+          0.5361409015607289,
+          0.5369897959183674,
+          0.40238647663241633,
+          0.4284221525600836
+        ],
+        "per_level_precision": [
+          0.9252181763466747,
+          0.40407918416316735,
+          0.2527060782681099,
+          0.21243523316062177
+        ],
+        "top_level_recall": 0.4284221525600836,
+        "confusion": [
+          [
+            6149,
+            3646,
+            1305,
+            369
+          ],
+          [
+            394,
+            3368,
+            1966,
+            544
+          ],
+          [
+            87,
+            1109,
+            1214,
+            607
+          ],
+          [
+            16,
+            212,
+            319,
+            410
+          ]
+        ]
+      },
+      "hard": {
+        "auroc": 0.8135320837393558,
+        "hard_recall": 0.950251256281407,
+        "hard_precision": 0.14235170129479072,
+        "false_easy_rate": 0.04974874371859297,
+        "positive_rate": 0.09164172231176607,
+        "score_threshold": 0.6484185457229614
+      }
+    },
+    "test": {
+      "regression": {
+        "rmse": 2.095616102218628,
+        "mae": 0.7897042036056519,
+        "pearson": 0.4696035353822771,
+        "spearman": 0.7413857858401769,
+        "rmse_log1p": 0.42847806215286255
+      },
+      "classification": {
+        "accuracy": 0.5377736805715603,
+        "adjacent_accuracy": 0.866697395713298,
+        "macro_f1": 0.45021806336981735,
+        "per_level_recall": [
+          0.611092032967033,
+          0.44882154882154884,
+          0.45466666666666666,
+          0.46883468834688347
+        ],
+        "per_level_precision": [
+          0.9297283176593522,
+          0.4187873075714735,
+          0.2541930674617965,
+          0.22496749024707413
+        ],
+        "top_level_recall": 0.46883468834688347,
+        "confusion": [
+          [
+            7118,
+            2582,
+            1402,
+            546
+          ],
+          [
+            409,
+            2666,
+            2234,
+            631
+          ],
+          [
+            91,
+            934,
+            1364,
+            611
+          ],
+          [
+            38,
+            184,
+            366,
+            519
+          ]
+        ]
+      },
+      "hard": {
+        "auroc": 0.8135237587743112,
+        "hard_recall": 0.9313959028108623,
+        "hard_precision": 0.1534175625833791,
+        "false_easy_rate": 0.06860409718913768,
+        "positive_rate": 0.09675040331873704,
+        "score_threshold": 0.6484185457229614
+      }
+    }
+  },
+  "per_scenario_type_test": {
+    "behind_long_vehicle": {
+      "n": 258,
+      "spearman": 0.798253795912143
+    },
+    "changing_lane": {
+      "n": 903,
+      "spearman": 0.5747214975727029
+    },
+    "following_lane_with_lead": {
+      "n": 646,
+      "spearman": 0.252071007234106
+    },
+    "high_lateral_acceleration": {
+      "n": 1419,
+      "spearman": 0.5594442266627238
+    },
+    "high_magnitude_speed": {
+      "n": 1032,
+      "spearman": 0.5374224423767149
+    },
+    "low_magnitude_speed": {
+      "n": 1680,
+      "spearman": 0.6931006520532452
+    },
+    "near_multiple_vehicles": {
+      "n": 1678,
+      "spearman": 0.7960513546709463
+    },
+    "starting_left_turn": {
+      "n": 2324,
+      "spearman": 0.4427229101713211
+    },
+    "starting_right_turn": {
+      "n": 1549,
+      "spearman": 0.6581132499235028
+    },
+    "starting_straight_traffic_light_intersection_traversal": {
+      "n": 2454,
+      "spearman": 0.39286308502272266
+    },
+    "stationary_in_traffic": {
+      "n": 2456,
+      "spearman": 0.6939857976197982
+    },
+    "stopping_with_lead": {
+      "n": 2195,
+      "spearman": 0.5442903714892288
+    },
+    "traversing_pickup_dropoff": {
+      "n": 2454,
+      "spearman": 0.5604531889401968
+    },
+    "waiting_for_pedestrian_to_cross": {
+      "n": 647,
+      "spearman": 0.7514725583979828
+    }
+  },
+  "importance": [
+    {
+      "group": "prev_d",
+      "prior_rank": 6,
+      "loo_delta_spearman": 0.10627564969661296,
+      "loo_delta_auroc": 0.11669047294656498,
+      "solo_spearman": 0.728092448298064,
+      "perm_delta_spearman": 0.3801730216706987,
+      "measured_rank": 1
+    },
+    {
+      "group": "ego_history",
+      "prior_rank": 1,
+      "loo_delta_spearman": 0.012690882195224185,
+      "loo_delta_auroc": 0.0049113459193479425,
+      "solo_spearman": 0.6006943986143076,
+      "perm_delta_spearman": 0.07783222797123746,
+      "measured_rank": 2
+    },
+    {
+      "group": "static_objects",
+      "prior_rank": 5,
+      "loo_delta_spearman": -0.0014762747411292132,
+      "loo_delta_auroc": -0.0014681390189498211,
+      "solo_spearman": 0.030103054878310814,
+      "perm_delta_spearman": -0.0001476165882577929,
+      "measured_rank": 3
+    },
+    {
+      "group": "route_lanes",
+      "prior_rank": 3,
+      "loo_delta_spearman": -0.0019815379659536836,
+      "loo_delta_auroc": -0.002302841845488457,
+      "solo_spearman": 0.5035752549945564,
+      "perm_delta_spearman": 0.016557727840646463,
+      "measured_rank": 4
+    },
+    {
+      "group": "lanes",
+      "prior_rank": 4,
+      "loo_delta_spearman": -0.002540002913635764,
+      "loo_delta_auroc": 0.0016376177538055536,
+      "solo_spearman": 0.42842604396577977,
+      "perm_delta_spearman": 0.006983927577893345,
+      "measured_rank": 5
+    },
+    {
+      "group": "neighbor_agents",
+      "prior_rank": 2,
+      "loo_delta_spearman": -0.003537286759576652,
+      "loo_delta_auroc": -0.0009987356803718983,
+      "solo_spearman": 0.47672363388199773,
+      "perm_delta_spearman": 0.009801189975605307,
+      "measured_rank": 6
+    }
+  ]
+}
