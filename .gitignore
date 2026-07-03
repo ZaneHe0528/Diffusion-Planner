@@ -12,3 +12,4 @@ cache/
 checkpoints/
 dataset
 *.csv
+nuplan-devkit
