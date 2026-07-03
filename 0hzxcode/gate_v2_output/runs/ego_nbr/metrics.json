@@ -1,0 +1,90 @@
+{
+  "data": {
+    "rows": 144446,
+    "enabled_groups": [
+      "ego_history",
+      "neighbor_agents"
+    ],
+    "parameters": 92097,
+    "hard_threshold_m": 2.650489568710327,
+    "score_threshold_m": 0.18562597036361694,
+    "level_edges_m": [
+      0.275,
+      0.696,
+      1.385
+    ]
+  },
+  "splits": {
+    "train": {
+      "regression": {
+        "rmse": 2.20613169670105,
+        "mae": 0.8026955127716064,
+        "pearson": 0.35703052016452985,
+        "spearman": 0.6905703912908503
+      },
+      "level": {
+        "accuracy": 0.46162402669632924,
+        "adjacent_accuracy": 0.879405849372479
+      },
+      "hard": {
+        "auroc": 0.7752745136792889,
+        "hard_recall": 0.9822471910112359,
+        "hard_precision": 0.12498034225913907,
+        "false_easy_rate": 0.017752808988764045,
+        "score_threshold": 0.18562597036361694
+      }
+    },
+    "val": {
+      "regression": {
+        "rmse": 2.0486230850219727,
+        "mae": 0.8109845519065857,
+        "pearson": 0.2716699903653303,
+        "spearman": 0.5879947667211024
+      },
+      "level": {
+        "accuracy": 0.40861155883030165,
+        "adjacent_accuracy": 0.8353212065392586
+      },
+      "hard": {
+        "auroc": 0.6782928839380681,
+        "hard_recall": 0.950251256281407,
+        "hard_precision": 0.10841646600160532,
+        "false_easy_rate": 0.04974874371859297,
+        "score_threshold": 0.18562597036361694
+      }
+    },
+    "test": {
+      "regression": {
+        "rmse": 2.2518277168273926,
+        "mae": 0.8607419729232788,
+        "pearson": 0.2666347063294971,
+        "spearman": 0.6260677534044099
+      },
+      "level": {
+        "accuracy": 0.42765614196819546,
+        "adjacent_accuracy": 0.848398248444342
+      },
+      "hard": {
+        "auroc": 0.6981594064806568,
+        "hard_recall": 0.9652215340638399,
+        "hard_precision": 0.12263922518159806,
+        "false_easy_rate": 0.034778465936160075,
+        "score_threshold": 0.18562597036361694
+      }
+    }
+  },
+  "importance": [
+    {
+      "group": "ego_history",
+      "loo_delta_spearman": 0.06678911898722306,
+      "solo_spearman": 0.6045699807377359,
+      "perm_delta_spearman": 0.236947492259534
+    },
+    {
+      "group": "neighbor_agents",
+      "loo_delta_spearman": 0.021497772666673964,
+      "solo_spearman": 0.5592786344171868,
+      "perm_delta_spearman": 0.3250575312191714
+    }
+  ]
+}

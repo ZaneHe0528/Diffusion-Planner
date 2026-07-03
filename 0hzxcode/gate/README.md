@@ -92,6 +92,18 @@ hard = d > train P90，训练集做 BLUE 式时间冗余下采样（连续帧签
 诊断基线（test）：单特征当前速度 Spearman 0.581 / AUROC 0.639；
 "上一帧 d 直接当预测"（持续性）Spearman 0.695 / AUROC 0.796。
 
+指标含义（均 on test 集；d = 帧间变化距离，米，`perstep_max_m` 口径）：
+
+| 列名 | 含义 |
+|---|---|
+| Spearman | 预测 `d_hat` 与真值 d 的 Spearman 秩相关系数；衡量排序/单调性，对 warm-start 选操作点更关键 |
+| AUROC(hard@P90) | 正类 = d > 训练集 P90（hard 帧），分数 = `d_hat` 的 ROC-AUC；衡量 hard/easy 判别能力 |
+| RMSE | 回归均方根误差 sqrt(mean((d - d_hat)²))（米） |
+| MAE | 平均绝对误差 mean(|d - d_hat|)（米） |
+| hard recall | 在 val 集上按 `d_hat` 校准阈值（目标 recall=95%）后，test 上对 hard 帧的召回率；漏检 hard = false easy |
+| level acc | 4 档 level（低/中/高/满，边界=训练集 d 分位数 0.5/0.8/0.95）分类准确率 |
+| adj acc | 相邻档准确率：预测档位与真值相差 ≤1 档即计为正确 |
+
 解读：
 - 原始观测里关于 d 的信号大头在 **ego 运动学**；邻车/车道主要提升 hard/easy
   判别（AUROC +0.015），对秩相关几乎无增益；静态障碍无贡献。

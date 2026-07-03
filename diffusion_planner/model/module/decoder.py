@@ -40,7 +40,7 @@ class Decoder(nn.Module):
     def sde(self):
         return self._sde
     
-    def forward(self, encoder_outputs, inputs):
+    def forward(self, encoder_outputs, inputs, warmstart=None):
         """
         Diffusion decoder process.
 
@@ -101,8 +101,21 @@ class Decoder(nn.Module):
                     ).reshape(B, P, -1, 4)
                 }
         else:
-            # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
-            xT = torch.cat([current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.5], dim=2).reshape(B, P, -1)
+            diffusion_steps = 10
+            sample_params = {}
+
+            if warmstart is not None and warmstart.get("x_init") is not None:
+                xT = warmstart["x_init"]
+                diffusion_steps = int(warmstart.get("steps", diffusion_steps))
+                t_start = warmstart.get("t_start")
+                if t_start is not None:
+                    sample_params["t_start"] = t_start
+            else:
+                # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
+                xT = torch.cat(
+                    [current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.5],
+                    dim=2,
+                ).reshape(B, P, -1)
 
             def initial_state_constraint(xt, t, step):
                 xt = xt.reshape(B, P, -1, 4)
@@ -112,6 +125,7 @@ class Decoder(nn.Module):
             x0 = dpm_sampler(
                         self.dit,
                         xT,
+                        diffusion_steps=diffusion_steps,
                         other_model_params={
                             "cross_c": ego_neighbor_encoding, 
                             "route_lanes": route_lanes,
@@ -136,12 +150,15 @@ class Decoder(nn.Module):
                             "guidance_scale": 0.5,
                             "guidance_type": "classifier" if self._guidance_fn is not None else "uncond"
                         },
+                        sample_params=sample_params,
                 )
-            x0 = self._state_normalizer.inverse(x0.reshape(B, P, -1, 4))[:, :, 1:]
+            x0_norm = x0.reshape(B, P, -1, 4)
+            prediction = self._state_normalizer.inverse(x0_norm)[:, :, 1:]
 
-            return {
-                    "prediction": x0
-                }
+            out = {"prediction": prediction}
+            if warmstart is not None and warmstart.get("return_x0_norm"):
+                out["x0_norm"] = x0.reshape(B, P, -1)
+            return out
 
         
 class RouteEncoder(nn.Module):

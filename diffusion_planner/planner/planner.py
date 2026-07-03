@@ -1,8 +1,11 @@
 
 import warnings
+import sys
+from pathlib import Path
+
 import torch
 import numpy as np
-from typing import Deque, Dict, List, Type
+from typing import Deque, Dict, List, Optional, Type
 
 warnings.filterwarnings("ignore")
 
@@ -21,6 +24,10 @@ from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.data_process.data_processor import DataProcessor
 from diffusion_planner.utils.config import Config
 
+GATE_V2_ROOT = Path(__file__).resolve().parents[2] / "0hzxcode" / "gate_v2"
+if str(GATE_V2_ROOT) not in sys.path:
+    sys.path.insert(0, str(GATE_V2_ROOT))
+
 def identity(ego_state, predictions):
     return predictions
 
@@ -36,6 +43,8 @@ class DiffusionPlanner(AbstractPlanner):
 
             enable_ema: bool = True,
             device: str = "cpu",
+            gate_ckpt_path: Optional[str] = None,
+            enable_warmstart: bool = False,
         ):
 
         assert device in ["cpu", "cuda"], f"device {device} not supported"
@@ -59,6 +68,18 @@ class DiffusionPlanner(AbstractPlanner):
         self.data_processor = DataProcessor(config)
         
         self.observation_normalizer = config.observation_normalizer
+
+        self._gate_controller = None
+        if enable_warmstart and gate_ckpt_path:
+            from inference import GateWarmStartController
+
+            self._gate_controller = GateWarmStartController(
+                gate_ckpt_path,
+                device=device,
+                base_steps=10,
+                enabled=True,
+            )
+        self._last_gate_meta: Dict = {}
 
     def name(self) -> str:
         """
@@ -119,9 +140,37 @@ class DiffusionPlanner(AbstractPlanner):
         Inherited.
         """
         inputs = self.planner_input_to_model_inputs(current_input)
+        inputs = self.observation_normalizer(inputs)
 
-        inputs = self.observation_normalizer(inputs)        
-        _, outputs = self._planner(inputs)
+        warmstart = None
+        if self._gate_controller is not None:
+            from inference import anchor_from_ego_state, build_ego_history_from_ego_states
+
+            ego_states = list(current_input.history.ego_states)
+            ego_history = build_ego_history_from_ego_states(ego_states)
+            anchor = anchor_from_ego_state(ego_states[-1])
+            ops, gate_meta = self._gate_controller.predict_ops(inputs, ego_history=ego_history)
+            self._last_gate_meta = gate_meta
+
+            ego_current = inputs["ego_current_state"][:, None, :4]
+            neighbors_current = inputs["neighbor_agents_past"][:, : self._config.predicted_neighbor_num, -1, :4]
+            current_states = torch.cat([ego_current, neighbors_current], dim=1)
+            warmstart = self._gate_controller.prepare_warmstart(
+                ops,
+                current_states,
+                anchor,
+                sde=self._planner.sde,
+            )
+            if warmstart is not None:
+                warmstart["return_x0_norm"] = True
+
+        _, outputs = self._planner(inputs, warmstart=warmstart)
+
+        if self._gate_controller is not None and "x0_norm" in outputs:
+            from inference import anchor_from_ego_state
+
+            anchor = anchor_from_ego_state(list(current_input.history.ego_states)[-1])
+            self._gate_controller.on_decode(outputs["x0_norm"], anchor)
 
         trajectory = InterpolatedTrajectory(
             trajectory=self.outputs_to_trajectory(outputs, current_input.history.ego_states)

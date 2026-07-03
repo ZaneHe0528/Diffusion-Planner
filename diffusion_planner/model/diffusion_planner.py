@@ -17,10 +17,10 @@ class Diffusion_Planner(nn.Module):
     def sde(self):
         return self.decoder.decoder.sde
     
-    def forward(self, inputs):
+    def forward(self, inputs, warmstart=None):
 
         encoder_outputs = self.encoder(inputs)
-        decoder_outputs = self.decoder(encoder_outputs, inputs)
+        decoder_outputs = self.decoder(encoder_outputs, inputs, warmstart=warmstart)
 
         return encoder_outputs, decoder_outputs
 
@@ -95,8 +95,8 @@ class Diffusion_Planner_Decoder(nn.Module):
         nn.init.constant_(self.decoder.dit.final_layer.proj[-1].weight, 0)
         nn.init.constant_(self.decoder.dit.final_layer.proj[-1].bias, 0)
 
-    def forward(self, encoder_outputs, inputs):
+    def forward(self, encoder_outputs, inputs, warmstart=None):
 
-        decoder_outputs = self.decoder(encoder_outputs, inputs)
+        decoder_outputs = self.decoder(encoder_outputs, inputs, warmstart=warmstart)
         
         return decoder_outputs
