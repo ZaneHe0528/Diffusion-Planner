@@ -4,7 +4,7 @@ import torch.nn as nn
 from timm.models.layers import Mlp
 from timm.layers import DropPath
 
-from diffusion_planner.model.diffusion_utils.sampling import dpm_sampler
+from diffusion_planner.model.diffusion_utils.sampling import dpm_sampler, build_dpm_solver_bundle
 from diffusion_planner.model.diffusion_utils.sde import SDE, VPSDE_linear
 from diffusion_planner.utils.normalizer import ObservationNormalizer, StateNormalizer
 from diffusion_planner.model.module.mixer import MixerBlock
@@ -103,59 +103,140 @@ class Decoder(nn.Module):
         else:
             diffusion_steps = 10
             sample_params = {}
-
-            if warmstart is not None and warmstart.get("x_init") is not None:
-                xT = warmstart["x_init"]
-                diffusion_steps = int(warmstart.get("steps", diffusion_steps))
-                t_start = warmstart.get("t_start")
-                if t_start is not None:
-                    sample_params["t_start"] = t_start
-            else:
-                # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
-                xT = torch.cat(
-                    [current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.5],
-                    dim=2,
-                ).reshape(B, P, -1)
+            warmstart_meta = {}
 
             def initial_state_constraint(xt, t, step):
                 xt = xt.reshape(B, P, -1, 4)
                 xt[:, :, 0, :] = current_states
                 return xt.reshape(B, P, -1)
-            
-            x0 = dpm_sampler(
-                        self.dit,
-                        xT,
-                        diffusion_steps=diffusion_steps,
-                        other_model_params={
-                            "cross_c": ego_neighbor_encoding, 
-                            "route_lanes": route_lanes,
-                            "neighbor_current_mask": neighbor_current_mask                            
-                        },
-                        dpm_solver_params={
-                            "correcting_xt_fn":initial_state_constraint,
-                        },
-                        model_wrapper_params={
-                            "classifier_fn": self._guidance_fn,
-                            "classifier_kwargs": {
-                                "model": self.dit,
-                                "model_condition": {
-                                    "cross_c": ego_neighbor_encoding, 
-                                    "route_lanes": route_lanes,
-                                    "neighbor_current_mask": neighbor_current_mask                            
-                                },
-                                "inputs": inputs,
-                                "observation_normalizer": self._observation_normalizer,
-                                "state_normalizer": self._state_normalizer
+
+            def _build_xT_full_noise():
+                return torch.cat(
+                    [current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.5],
+                    dim=2,
+                ).reshape(B, P, -1)
+
+            def _run_sampler(xT, steps, extra_sample_params=None):
+                params = dict(sample_params)
+                if extra_sample_params:
+                    params.update(extra_sample_params)
+                nfe_holder = {}
+                params["nfe_holder"] = nfe_holder
+                x0_out = dpm_sampler(
+                    self.dit,
+                    xT,
+                    diffusion_steps=steps,
+                    other_model_params={
+                        "cross_c": ego_neighbor_encoding,
+                        "route_lanes": route_lanes,
+                        "neighbor_current_mask": neighbor_current_mask,
+                    },
+                    dpm_solver_params={
+                        "correcting_xt_fn": initial_state_constraint,
+                    },
+                    model_wrapper_params={
+                        "classifier_fn": self._guidance_fn,
+                        "classifier_kwargs": {
+                            "model": self.dit,
+                            "model_condition": {
+                                "cross_c": ego_neighbor_encoding,
+                                "route_lanes": route_lanes,
+                                "neighbor_current_mask": neighbor_current_mask,
                             },
-                            "guidance_scale": 0.5,
-                            "guidance_type": "classifier" if self._guidance_fn is not None else "uncond"
+                            "inputs": inputs,
+                            "observation_normalizer": self._observation_normalizer,
+                            "state_normalizer": self._state_normalizer,
                         },
-                        sample_params=sample_params,
+                        "guidance_scale": 0.5,
+                        "guidance_type": "classifier" if self._guidance_fn is not None else "uncond",
+                    },
+                    sample_params=params,
                 )
+                warmstart_meta["nfe"] = int(nfe_holder.get("nfe", steps))
+                return x0_out
+
+            use_warmstart = warmstart is not None and warmstart.get("x_init") is not None
+            if use_warmstart:
+                x_init = warmstart["x_init"]
+                diffusion_steps = int(warmstart.get("steps", diffusion_steps))
+                t_start = float(warmstart.get("t_start", 1.0))
+                sample_params["t_start"] = t_start
+                epsilon_m = float(warmstart.get("epsilon_m", float("inf")))
+                ref_x0_norm = warmstart.get("ref_x0_norm")
+
+                model_fn, _, _ = build_dpm_solver_bundle(
+                    self.dit,
+                    other_model_params={
+                        "cross_c": ego_neighbor_encoding,
+                        "route_lanes": route_lanes,
+                        "neighbor_current_mask": neighbor_current_mask,
+                    },
+                    dpm_solver_params={"correcting_xt_fn": initial_state_constraint},
+                    model_wrapper_params={
+                        "classifier_fn": self._guidance_fn,
+                        "classifier_kwargs": {
+                            "model": self.dit,
+                            "model_condition": {
+                                "cross_c": ego_neighbor_encoding,
+                                "route_lanes": route_lanes,
+                                "neighbor_current_mask": neighbor_current_mask,
+                            },
+                            "inputs": inputs,
+                            "observation_normalizer": self._observation_normalizer,
+                            "state_normalizer": self._state_normalizer,
+                        },
+                        "guidance_scale": 0.5,
+                        "guidance_type": "classifier" if self._guidance_fn is not None else "uncond",
+                    },
+                )
+
+                t_tensor = torch.full((B,), t_start, device=current_states.device, dtype=x_init.dtype)
+                first_model_output = model_fn(x_init, t_tensor)
+                validation_nfe = 1
+
+                passive_fallback = False
+                d_meas = None
+                if ref_x0_norm is not None and epsilon_m < float("inf"):
+                    x_start_hat = self.dit(
+                        x_init,
+                        t_tensor,
+                        ego_neighbor_encoding,
+                        route_lanes,
+                        neighbor_current_mask,
+                    )
+                    pred_phys = self._state_normalizer.inverse(x_start_hat.reshape(B, P, -1, 4))
+                    ref_phys = self._state_normalizer.inverse(ref_x0_norm.reshape(B, P, -1, 4))
+                    dist = torch.linalg.norm(
+                        pred_phys[:, 0, :, :2] - ref_phys[:, 0, :, :2],
+                        dim=-1,
+                    )
+                    d_meas = float(dist.max().item())
+                    passive_fallback = d_meas > epsilon_m
+                    warmstart_meta["d_meas_m"] = d_meas
+                    warmstart_meta["epsilon_m"] = epsilon_m
+
+                if passive_fallback:
+                    warmstart_meta["passive_fallback"] = True
+                    xT = _build_xT_full_noise()
+                    x0 = _run_sampler(xT, 10)
+                    warmstart_meta["nfe"] = validation_nfe + int(warmstart_meta.get("nfe", 10))
+                else:
+                    warmstart_meta["passive_fallback"] = False
+                    x0 = _run_sampler(
+                        x_init,
+                        diffusion_steps,
+                        extra_sample_params={"first_model_output": first_model_output},
+                    )
+                    warmstart_meta["nfe"] = validation_nfe + int(warmstart_meta.get("nfe", diffusion_steps))
+            else:
+                if warmstart is not None and warmstart.get("forced_full"):
+                    warmstart_meta["forced_full"] = True
+                xT = _build_xT_full_noise()
+                x0 = _run_sampler(xT, diffusion_steps)
             x0_norm = x0.reshape(B, P, -1, 4)
             prediction = self._state_normalizer.inverse(x0_norm)[:, :, 1:]
 
-            out = {"prediction": prediction}
+            out = {"prediction": prediction, "warmstart_meta": warmstart_meta}
             if warmstart is not None and warmstart.get("return_x0_norm"):
                 out["x0_norm"] = x0.reshape(B, P, -1)
             return out

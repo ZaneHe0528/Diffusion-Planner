@@ -1047,6 +1047,7 @@ class DPM_Solver:
     def sample(self, x, steps=20, t_start=None, t_end=None, order=2, skip_type='time_uniform',
         method='multistep', lower_order_final=True, denoise_to_zero=False, solver_type='dpmsolver',
         atol=0.0078, rtol=0.05, return_intermediate=False,
+        first_model_output=None, nfe_counter=None,
     ):
         """
         Compute the sample at time `t_end` by DPM-Solver, given the initial `x` at time `t_start`.
@@ -1166,6 +1167,11 @@ class DPM_Solver:
         device = x.device
         intermediates = []
         with torch.no_grad():
+            def _eval_model(x_in, t_in):
+                if nfe_counter is not None:
+                    nfe_counter[0] += 1
+                return self.model_fn(x_in, t_in)
+
             if method == 'adaptive':
                 x = self.dpm_solver_adaptive(x, order=order, t_T=t_T, t_0=t_0, atol=atol, rtol=rtol, solver_type=solver_type)
             elif method == 'multistep':
@@ -1176,7 +1182,10 @@ class DPM_Solver:
                 step = 0
                 t = timesteps[step]
                 t_prev_list = [t]
-                model_prev_list = [self.model_fn(x, t)]
+                if first_model_output is not None:
+                    model_prev_list = [first_model_output]
+                else:
+                    model_prev_list = [_eval_model(x, t)]
                 if self.correcting_xt_fn is not None:
                     x = self.correcting_xt_fn(x, t, step)
                 if return_intermediate:
@@ -1190,7 +1199,7 @@ class DPM_Solver:
                     if return_intermediate:
                         intermediates.append(x)
                     t_prev_list.append(t)
-                    model_prev_list.append(self.model_fn(x, t))
+                    model_prev_list.append(_eval_model(x, t))
                 # Compute the remaining values by `order`-th order multistep DPM-Solver.
                 for step in range(order, steps + 1):
                     t = timesteps[step]
@@ -1210,7 +1219,7 @@ class DPM_Solver:
                     t_prev_list[-1] = t
                     # We do not need to evaluate the final model value.
                     if step < steps:
-                        model_prev_list[-1] = self.model_fn(x, t)
+                        model_prev_list[-1] = _eval_model(x, t)
             elif method in ['singlestep', 'singlestep_fixed']:
                 if method == 'singlestep':
                     timesteps_outer, orders = self.get_orders_and_timesteps_for_singlestep_solver(steps=steps, order=order, skip_type=skip_type, t_T=t_T, t_0=t_0, device=device)

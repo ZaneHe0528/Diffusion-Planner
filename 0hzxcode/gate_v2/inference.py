@@ -68,12 +68,17 @@ class GateWarmStartController:
         device: str = "cpu",
         base_steps: int = 10,
         enabled: bool = True,
+        future_len: int = 80,
+        predicted_neighbor_num: int = 10,
     ):
         self.device = device
         self.base_steps = base_steps
         self.enabled = enabled
+        self.future_len = future_len
+        self.predicted_neighbor_num = predicted_neighbor_num
         self.model: LiteGate | None = None
         self.safety: SafetyConfig | None = None
+        self.state_normalizer = None
         self.cache = WarmStartCache()
         self._prev_d_hat: float | None = None
         self._prev_d_valid: bool = False
@@ -86,6 +91,9 @@ class GateWarmStartController:
                 level_edges_m=self.safety.level_edges_m,
                 base_steps=base_steps,
             )
+
+    def set_state_normalizer(self, state_normalizer) -> None:
+        self.state_normalizer = state_normalizer
 
     @torch.no_grad()
     def predict_ops(
@@ -129,10 +137,29 @@ class GateWarmStartController:
         ops: WarmStartOps | None,
         current_states: torch.Tensor,
         anchor_xyh: np.ndarray | torch.Tensor,
+        *,
+        neighbor_tokens: list[str] | None = None,
+        neighbor_agents_past: torch.Tensor | None = None,
         sde=None,
     ) -> dict | None:
-        if not self.enabled or ops is None or ops.reuse_ratio <= 0:
+        if not self.enabled or ops is None:
             return None
+
+        meta = {
+            "level": ops.level,
+            "d_hat_m": ops.d_hat_m,
+            "reuse_ratio": ops.reuse_ratio,
+            "t_start": ops.t_start,
+            "steps": ops.steps,
+        }
+
+        if ops.reuse_ratio <= 0:
+            return {
+                "forced_full": True,
+                "return_x0_norm": True,
+                "meta": meta,
+            }
+
         if isinstance(anchor_xyh, np.ndarray):
             anchor = torch.from_numpy(anchor_xyh).float().to(current_states.device).unsqueeze(0)
         else:
@@ -140,21 +167,40 @@ class GateWarmStartController:
             if anchor.dim() == 1:
                 anchor = anchor.unsqueeze(0)
 
-        x_init = build_warmstart_init(self.cache, current_states, anchor, ops.t_start, sde=sde)
+        n_tokens = None
+        if neighbor_tokens is not None:
+            n_tokens = neighbor_tokens[: self.predicted_neighbor_num]
+
+        x_init, ref_x0_norm = build_warmstart_init(
+            self.cache,
+            current_states,
+            anchor,
+            ops.t_start,
+            current_neighbor_tokens=n_tokens,
+            neighbor_agents_past=neighbor_agents_past,
+            future_len=self.future_len,
+            state_normalizer=self.state_normalizer,
+            sde=sde,
+        )
         if x_init is None:
             return None
+
+        epsilon_m = float(self.safety.hard_threshold_m) if self.safety is not None else float("inf")
         return {
             "x_init": x_init,
             "t_start": ops.t_start,
             "steps": ops.steps,
             "return_x0_norm": True,
-            "meta": {"level": ops.level, "d_hat_m": ops.d_hat_m, "reuse_ratio": ops.reuse_ratio},
+            "ref_x0_norm": ref_x0_norm,
+            "epsilon_m": epsilon_m,
+            "meta": meta,
         }
 
     def on_decode(
         self,
         x0_norm: torch.Tensor,
         anchor_xyh: np.ndarray | torch.Tensor,
+        neighbor_tokens: list[str] | None = None,
     ) -> None:
         if isinstance(anchor_xyh, np.ndarray):
             anchor = torch.from_numpy(anchor_xyh).float().to(x0_norm.device).unsqueeze(0)
@@ -162,7 +208,10 @@ class GateWarmStartController:
             anchor = anchor_xyh.float()
             if anchor.dim() == 1:
                 anchor = anchor.unsqueeze(0)
-        update_cache(self.cache, x0_norm, anchor)
+        n_tokens = None
+        if neighbor_tokens is not None:
+            n_tokens = neighbor_tokens[: self.predicted_neighbor_num]
+        update_cache(self.cache, x0_norm, anchor, neighbor_tokens=n_tokens)
 
     def reset(self) -> None:
         self.cache = WarmStartCache()

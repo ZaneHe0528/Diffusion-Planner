@@ -1,4 +1,6 @@
 
+import json
+import time
 import warnings
 import sys
 from pathlib import Path
@@ -27,6 +29,10 @@ from diffusion_planner.utils.config import Config
 GATE_V2_ROOT = Path(__file__).resolve().parents[2] / "0hzxcode" / "gate_v2"
 if str(GATE_V2_ROOT) not in sys.path:
     sys.path.insert(0, str(GATE_V2_ROOT))
+
+DIAG_ROOT = Path(__file__).resolve().parents[2] / "0hzxcode" / "gate_v2_output" / "val14_closedloop"
+_scenario_counter = 0
+
 
 def identity(ego_state, predictions):
     return predictions
@@ -70,6 +76,7 @@ class DiffusionPlanner(AbstractPlanner):
         self.observation_normalizer = config.observation_normalizer
 
         self._gate_controller = None
+        self._enable_warmstart = enable_warmstart
         if enable_warmstart and gate_ckpt_path:
             from inference import GateWarmStartController
 
@@ -78,8 +85,12 @@ class DiffusionPlanner(AbstractPlanner):
                 device=device,
                 base_steps=10,
                 enabled=True,
+                future_len=config.future_len,
+                predicted_neighbor_num=config.predicted_neighbor_num,
             )
+            self._gate_controller.set_state_normalizer(config.state_normalizer)
         self._last_gate_meta: Dict = {}
+        self._scenario_idx = 0
 
     def name(self) -> str:
         """
@@ -118,12 +129,19 @@ class DiffusionPlanner(AbstractPlanner):
         self._planner = self._planner.to(self._device)
         self._initialization = initialization
 
-    def planner_input_to_model_inputs(self, planner_input: PlannerInput) -> Dict[str, torch.Tensor]:
+        if self._gate_controller is not None:
+            self._gate_controller.reset()
+        global _scenario_counter
+        _scenario_counter += 1
+        self._scenario_idx = _scenario_counter
+
+    def planner_input_to_model_inputs(self, planner_input: PlannerInput) -> tuple[Dict[str, torch.Tensor], List[str]]:
         history = planner_input.history
         traffic_light_data = list(planner_input.traffic_light_data)
-        model_inputs = self.data_processor.observation_adapter(history, traffic_light_data, self._map_api, self._route_roadblock_ids, self._device)
-
-        return model_inputs
+        model_inputs, selected_neighbor_tokens = self.data_processor.observation_adapter(
+            history, traffic_light_data, self._map_api, self._route_roadblock_ids, self._device
+        )
+        return model_inputs, selected_neighbor_tokens
 
     def outputs_to_trajectory(self, outputs: Dict[str, torch.Tensor], ego_state_history: Deque[EgoState]) -> List[InterpolatableState]:    
 
@@ -134,15 +152,24 @@ class DiffusionPlanner(AbstractPlanner):
         states = transform_predictions_to_states(predictions, ego_state_history, self._future_horizon, self._step_interval)
 
         return states
+
+    def _append_diag(self, rec: Dict) -> None:
+        if not self._enable_warmstart:
+            return
+        DIAG_ROOT.mkdir(parents=True, exist_ok=True)
+        out_path = DIAG_ROOT / "frames.jsonl"
+        with out_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     
     def compute_planner_trajectory(self, current_input: PlannerInput) -> AbstractTrajectory:
         """
         Inherited.
         """
-        inputs = self.planner_input_to_model_inputs(current_input)
+        inputs, selected_neighbor_tokens = self.planner_input_to_model_inputs(current_input)
         inputs = self.observation_normalizer(inputs)
 
         warmstart = None
+        gate_meta: Dict = {}
         if self._gate_controller is not None:
             from inference import anchor_from_ego_state, build_ego_history_from_ego_states
 
@@ -159,22 +186,50 @@ class DiffusionPlanner(AbstractPlanner):
                 ops,
                 current_states,
                 anchor,
+                neighbor_tokens=selected_neighbor_tokens,
+                neighbor_agents_past=inputs["neighbor_agents_past"],
                 sde=self._planner.sde,
             )
-            if warmstart is not None:
-                warmstart["return_x0_norm"] = True
 
+        t0 = time.perf_counter()
+        if torch.cuda.is_available() and self._device == "cuda":
+            torch.cuda.synchronize()
         _, outputs = self._planner(inputs, warmstart=warmstart)
+        if torch.cuda.is_available() and self._device == "cuda":
+            torch.cuda.synchronize()
+        decoder_ms = (time.perf_counter() - t0) * 1000.0
 
         if self._gate_controller is not None and "x0_norm" in outputs:
             from inference import anchor_from_ego_state
 
             anchor = anchor_from_ego_state(list(current_input.history.ego_states)[-1])
-            self._gate_controller.on_decode(outputs["x0_norm"], anchor)
+            self._gate_controller.on_decode(
+                outputs["x0_norm"],
+                anchor,
+                neighbor_tokens=selected_neighbor_tokens,
+            )
+
+        ws_meta = outputs.get("warmstart_meta", {})
+        if self._enable_warmstart:
+            rec = {
+                "scenario_idx": self._scenario_idx,
+                "decoder_ms": round(decoder_ms, 3),
+                "nfe": ws_meta.get("nfe"),
+                "d_hat_m": gate_meta.get("d_hat_m"),
+                "level": gate_meta.get("level", gate_meta.get("level_from_gate")),
+                "t_start": gate_meta.get("t_start"),
+                "steps": gate_meta.get("steps"),
+                "forced_full": bool(gate_meta.get("forced_full", False)),
+                "passive_fallback": bool(ws_meta.get("passive_fallback", False)),
+                "d_meas_m": ws_meta.get("d_meas_m"),
+                "epsilon_m": ws_meta.get("epsilon_m"),
+                "neighbor_score": gate_meta.get("neighbor_score"),
+                "level_bump": gate_meta.get("level_bump"),
+            }
+            self._append_diag(rec)
 
         trajectory = InterpolatedTrajectory(
             trajectory=self.outputs_to_trajectory(outputs, current_input.history.ego_states)
         )
 
         return trajectory
-    

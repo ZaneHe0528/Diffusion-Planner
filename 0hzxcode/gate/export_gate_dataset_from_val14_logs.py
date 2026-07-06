@@ -166,9 +166,9 @@ def observation_arrays(
     ego_history = convert_absolute_quantities_to_relative(ego_abs, anchor_ego_state.copy(), "ego").astype(np.float32)
 
     # 邻车 / 静态障碍（与 observation_adapter 相同）
-    neighbor_agents_past, neighbor_agents_types = sampled_tracked_objects_to_array_list(observations)
+    neighbor_agents_past, neighbor_agents_types, track_token_ids = sampled_tracked_objects_to_array_list(observations)
     static_objects, static_objects_types = sampled_static_objects_to_array_list(observations[-1])
-    _, neighbor_agents_past, _, static_objects = agent_past_process(
+    _, neighbor_agents_past, _, static_objects, _ = agent_past_process(
         None,
         neighbor_agents_past,
         neighbor_agents_types,
@@ -178,6 +178,7 @@ def observation_arrays(
         config.static_objects_num,
         10,  # max_ped_bike，与 DataProcessor 一致
         anchor_ego_state,
+        track_token_ids=track_token_ids,
     )
 
     # 地图（与 observation_adapter 相同）

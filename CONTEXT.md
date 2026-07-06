@@ -29,8 +29,20 @@ _Avoid_: 探索（Falcon 原文的随机探索率 δ 已被本机制取代，不
 _Avoid_: latent buffer（Falcon 原文机制，本项目不保留）
 
 **场景门控（scene gate）**:
-挂在冻结 planner 的场景嵌入（encoder fusion 输出 `encoding`）上的轻量 MLP，回归预测当前帧的帧间变化距离 d_hat，据此自适应设定重加噪起始水平 t_s（最高档 = 完整去噪）。沿用 BLUE 的"冻结主干 + 现成 hidden state 上训练小 gate"思路；标签来自离线统计，无需人工标注。详见 `docs/adr/0002`。
+挂在冻结 planner 的场景嵌入（encoder fusion 输出 `encoding`）上的轻量 MLP，回归预测当前帧的帧间变化距离 d_hat，据此自适应设定重加噪起始水平 t_s（最高档 = 完整去噪）。沿用 BLUE 的"冻结主干 + 现成 hidden state 上训练小 gate"思路；标签来自离线统计，无需人工标注。详见 `0docs/adr/0002`。**当前未实现**；保留为历史/对照方案。
 _Avoid_: 语言门控（BLUE 原文 gate 决定"是否生成语言"；本项目 gate 回归 d_hat → t_s，是回归而非二分类）
+
+**轻量门控（lite gate）**:
+gate_v2 已实现版本：挂在**原始观测**（ego 运动学 + 邻车 token）上的 <0.1M MLP，回归 d_hat → 分箱映射 (t_s, steps)。不读 encoder `encoding`。详见 `0docs/adr/0003`。
+_Avoid_: 与 scene gate 混称（二者输入不同）
+
+**主动判难（active hard routing）**:
+gate 前置判定 d_hat 超过 score 阈值时，直接完整去噪、跳过 warm-start 尝试。
+_Avoid_: 被动回退（后者是一步估计失败后的兜底）
+
+**被动回退（passive fallback）**:
+warm-start 已构造后，一步估计测得 d_meas 超过 hard_threshold_m 时，放弃复用并完整去噪。
+_Avoid_: 主动判难（前者在 warm-start 之前就短路）
 
 **适配版核心三件套**:
 帧间复用 + 一步估计 + 阈值回退。Falcon 原文的多帧 latent buffer、温度 softmax 采样、探索率 δ 均不保留。

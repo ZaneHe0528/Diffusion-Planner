@@ -271,9 +271,9 @@ class GateDataProcessor:
             raise ValueError(f"expected {self.num_past_poses} past object frames, got {len(past_tracked_objects)}")
 
         sampled_past_observations = past_tracked_objects + [present_tracked_objects]
-        neighbor_agents_past, neighbor_agents_types = sampled_tracked_objects_to_array_list(sampled_past_observations)
+        neighbor_agents_past, neighbor_agents_types, track_token_ids = sampled_tracked_objects_to_array_list(sampled_past_observations)
         static_objects, static_objects_types = sampled_static_objects_to_array_list(present_tracked_objects)
-        ego_history, neighbor_agents_past, neighbor_indices, static_objects = agent_past_process(
+        ego_history, neighbor_agents_past, neighbor_indices, static_objects, _ = agent_past_process(
             ego_history_global.copy(),
             neighbor_agents_past,
             neighbor_agents_types,
@@ -283,6 +283,7 @@ class GateDataProcessor:
             self.num_static,
             self.max_ped_bike,
             anchor_ego_state,
+            track_token_ids=track_token_ids,
         )
 
         route_roadblock_ids = list(scenario.get_route_roadblock_ids())

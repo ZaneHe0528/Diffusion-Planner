@@ -73,7 +73,7 @@ def sampled_tracked_objects_to_array_list(past_tracked_objects):
         output.append(arrayified)
         output_types.append(agent_types)
 
-    return output, output_types
+    return output, output_types, track_token_ids
 
 def sampled_static_objects_to_array_list(present_tracked_objects):
 
@@ -201,7 +201,18 @@ def _pad_agent_states_with_zeros(agent_trajectories):
     return pad_agent_trajectories
 
 
-def agent_past_process(past_ego_states, past_tracked_objects, tracked_objects_types, num_agents, static_objects, static_objects_types, num_static, max_ped_bike, anchor_ego_state):
+def agent_past_process(
+    past_ego_states,
+    past_tracked_objects,
+    tracked_objects_types,
+    num_agents,
+    static_objects,
+    static_objects_types,
+    num_static,
+    max_ped_bike,
+    anchor_ego_state,
+    track_token_ids=None,
+):
     """
     This function process the data from the raw agent data.
     :param past_ego_states: The input array data of the ego past.
@@ -213,7 +224,7 @@ def agent_past_process(past_ego_states, past_tracked_objects, tracked_objects_ty
     :param num_static: Clip the number of static objects.
     :param max_ped_bike: Clip the total number of ped and bike.
     :param anchor_ego_state: Ego current state
-    :return: ego, agents, selected_indices, static_objects
+    :return: ego, agents, selected_indices, static_objects, selected_neighbor_tokens
     """
     agents_states_dim = 8 # x, y, cos h, sin h, vx, vy, length, width
     ego_history = past_ego_states
@@ -331,7 +342,16 @@ def agent_past_process(past_ego_states, past_tracked_objects, tracked_objects_ty
     if ego is not None:
         ego = ego.astype(np.float32)
 
-    return ego, agents, selected_indices, static_objects
+    selected_neighbor_tokens = [""] * num_agents
+    if track_token_ids and agent_history[-1].shape[0] != 0:
+        int_to_token = {int(v): str(k) for k, v in track_token_ids.items()}
+        track_token_idx = int(AgentInternalIndex.track_token())
+        last_agent_states = padded_agent_states[-1]
+        for slot_i, agent_j in enumerate(selected_indices):
+            tok_int = int(last_agent_states[agent_j, track_token_idx])
+            selected_neighbor_tokens[slot_i] = int_to_token.get(tok_int, "")
+
+    return ego, agents, selected_indices, static_objects, selected_neighbor_tokens
 
 
 def agent_future_process(anchor_ego_state, future_tracked_objects, num_agents, agent_index):

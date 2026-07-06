@@ -26,3 +26,6 @@ diffusion_planner:
     time_horizon: 8
 
   device: cuda
+
+  gate_ckpt_path: null
+  enable_warmstart: false

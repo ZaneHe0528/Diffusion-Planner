@@ -27,6 +27,17 @@ CUDA_VISIBLE_DEVICES=0 python 0hzxcode/gate_v2/train_gate.py \
 
 档位边界与 hard_threshold 均按 **所选 d-column 的 train 分位数** 自动计算，不再硬编码。
 
+## 闭环评测（集成后）
+
+```bash
+conda activate dp
+cd /home/ubuntu/code/hezexiang/Diffusion-Planner
+bash sim_gate_warmstart_runner.sh
+python 0hzxcode/gate_v2/summarize_val14_gate.py
+```
+
+诊断逐帧日志：`0hzxcode/gate_v2_output/val14_closedloop/frames.jsonl`
+
 ## 决策导向评测（无需重训）
 
 ```bash

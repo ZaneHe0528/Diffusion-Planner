@@ -51,10 +51,10 @@ class DataProcessor(object):
         neighbor
         '''
         observation_buffer = history_buffer.observation_buffer # Past observations including the current
-        neighbor_agents_past, neighbor_agents_types = sampled_tracked_objects_to_array_list(observation_buffer)
+        neighbor_agents_past, neighbor_agents_types, track_token_ids = sampled_tracked_objects_to_array_list(observation_buffer)
         static_objects, static_objects_types = sampled_static_objects_to_array_list(observation_buffer[-1])
-        _, neighbor_agents_past, _, static_objects = \
-            agent_past_process(ego_agent_past, neighbor_agents_past, neighbor_agents_types, self.num_agents, static_objects, static_objects_types, self.num_static, self.max_ped_bike, anchor_ego_state)
+        _, neighbor_agents_past, _, static_objects, selected_neighbor_tokens = \
+            agent_past_process(ego_agent_past, neighbor_agents_past, neighbor_agents_types, self.num_agents, static_objects, static_objects_types, self.num_static, self.max_ped_bike, anchor_ego_state, track_token_ids=track_token_ids)
 
         '''
         Map
@@ -76,7 +76,7 @@ class DataProcessor(object):
         data.update(vector_map)
         data = convert_to_model_inputs(data, device)
 
-        return data
+        return data, selected_neighbor_tokens
     
     def _output_path(self, map_name, token):
         return os.path.join(self._save_dir, f"{map_name}_{token}.npz")
@@ -108,13 +108,13 @@ class DataProcessor(object):
                 )
             ]
             sampled_past_observations = past_tracked_objects + [present_tracked_objects]
-            neighbor_agents_past, neighbor_agents_types = \
+            neighbor_agents_past, neighbor_agents_types, track_token_ids = \
                 sampled_tracked_objects_to_array_list(sampled_past_observations)
             
             static_objects, static_objects_types = sampled_static_objects_to_array_list(present_tracked_objects)
 
-            ego_agent_past, neighbor_agents_past, neighbor_indices, static_objects = \
-                agent_past_process(ego_agent_past, neighbor_agents_past, neighbor_agents_types, self.num_agents, static_objects, static_objects_types, self.num_static, self.max_ped_bike, anchor_ego_state)
+            ego_agent_past, neighbor_agents_past, neighbor_indices, static_objects, _ = \
+                agent_past_process(ego_agent_past, neighbor_agents_past, neighbor_agents_types, self.num_agents, static_objects, static_objects_types, self.num_static, self.max_ped_bike, anchor_ego_state, track_token_ids=track_token_ids)
             
             '''
             Map

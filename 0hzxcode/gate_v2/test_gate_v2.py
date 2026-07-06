@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gate_v2 单元测试：d->ops、warmstart、safety。"""
+"""gate_v2 单元测试：d->ops、warmstart、safety、token 匹配、首步注入。"""
 
 from __future__ import annotations
 
@@ -11,13 +11,31 @@ import torch
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
+REPO = ROOT.parents[1]
+sys.path.insert(0, str(REPO))
 
 from d_to_ops import d_hat_to_warmstart_ops, d_to_level
 from safety import SafetyConfig, apply_safety, neighbor_interaction_score
-from warmstart import WarmStartCache, build_warmstart_init, ego_shift_trajectory, renoise_to_t
+from warmstart import (
+    WarmStartCache,
+    build_warmstart_init,
+    constant_velocity_neighbor_x0,
+    ego_shift_trajectory,
+    renoise_to_t,
+    update_cache,
+)
+from diffusion_planner.model.diffusion_utils.sampling import dpm_sampler
+import diffusion_planner.model.diffusion_utils.dpm_solver_pytorch as dpm
 
 
 EDGES = (0.275, 0.696, 1.385)
+
+
+class _DummyModel(torch.nn.Module):
+    model_type = "x_start"
+
+    def forward(self, x, t, **kwargs):
+        return x
 
 
 def test_d_to_level():
@@ -65,14 +83,62 @@ def test_ego_shift_and_renoise():
 
 def test_build_warmstart_init():
     cache = WarmStartCache()
-    b, p, flat = 1, 3, 4 * 5
+    b, p, t_pts = 1, 3, 5
+    flat = t_pts * 4
     cache.x0_norm = torch.randn(b, p, flat)
     cache.anchor_xyh = torch.tensor([[0.0, 0.0, 0.0]])
+    cache.neighbor_tokens = ["tok_a", "tok_b"]
     cur = torch.tensor([[0.5, 0.0, 0.0]])
     current = torch.zeros(b, p, 4)
-    x_init = build_warmstart_init(cache, current, cur, t_start=0.2)
+    x_init, ref = build_warmstart_init(
+        cache,
+        current,
+        cur,
+        t_start=0.2,
+        current_neighbor_tokens=["tok_a", "tok_b"],
+        future_len=t_pts - 1,
+    )
     assert x_init is not None
+    assert ref is not None
     assert x_init.shape == (b, p, flat)
+
+
+def test_token_match_vs_cv():
+    cache = WarmStartCache()
+    b, p, t_pts = 1, 3, 5
+    flat = t_pts * 4
+    cache.x0_norm = torch.arange(b * p * flat, dtype=torch.float32).reshape(b, p, flat)
+    cache.anchor_xyh = torch.zeros(1, 3)
+    cache.neighbor_tokens = ["tok_a", "tok_b"]
+    cur = torch.zeros(1, 3)
+    current = torch.zeros(b, p, 4)
+
+    _, ref_match = build_warmstart_init(
+        cache,
+        current,
+        cur,
+        0.2,
+        current_neighbor_tokens=["tok_a", "unknown"],
+        future_len=t_pts - 1,
+    )
+    assert ref_match[0, 1].abs().sum() > 0
+    assert not torch.allclose(ref_match[0, 1], ref_match[0, 2])
+
+
+def test_first_model_output_injection_nfe():
+    model = _DummyModel()
+    x = torch.randn(1, 4)
+    first = torch.randn_like(x)
+    nfe_plain = {}
+    dpm_sampler(model, x, diffusion_steps=4, sample_params={"nfe_holder": nfe_plain})
+    nfe_inj = {}
+    dpm_sampler(
+        model,
+        x,
+        diffusion_steps=4,
+        sample_params={"first_model_output": first, "nfe_holder": nfe_inj},
+    )
+    assert nfe_inj["nfe"] == nfe_plain["nfe"] - 1
 
 
 if __name__ == "__main__":
@@ -82,4 +148,6 @@ if __name__ == "__main__":
     test_neighbor_bump()
     test_ego_shift_and_renoise()
     test_build_warmstart_init()
+    test_token_match_vs_cv()
+    test_first_model_output_injection_nfe()
     print("gate_v2 tests passed")

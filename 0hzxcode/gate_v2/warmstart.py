@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Warm-start 工具：ego-shift、再加噪、帧间缓存。"""
+"""Warm-start 工具：ego-shift、邻车 token 匹配、匀速外推、再加噪、帧间缓存。"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 
 from diffusion_planner.model.diffusion_utils.sde import VPSDE_linear
+
+PLAN_DT_S = 0.1
 
 
 @dataclass
 class WarmStartCache:
     x0_norm: torch.Tensor | None = None
     anchor_xyh: torch.Tensor | None = None
+    neighbor_tokens: list[str] = field(default_factory=list)
 
 
 def _rotate_xy(xy: torch.Tensor, dh: torch.Tensor) -> torch.Tensor:
@@ -60,6 +63,115 @@ def ego_shift_trajectory(
     return out
 
 
+def constant_velocity_neighbor_x0(
+    neighbor_slot: int,
+    neighbor_past: torch.Tensor,
+    future_len: int,
+    state_normalizer,
+    device: torch.device,
+) -> torch.Tensor:
+    """用当前观测匀速外推构造邻车归一化 x0 行 [flat]."""
+    flat = (1 + future_len) * 4
+    if neighbor_past.abs().sum() < 1e-6:
+        return torch.zeros(flat, device=device)
+
+    cur = neighbor_past[-1]
+    x, y = float(cur[0]), float(cur[1])
+    cos_h, sin_h = float(cur[2]), float(cur[3])
+    vx, vy = float(cur[4]), float(cur[5])
+
+    traj = torch.zeros(1 + future_len, 4, device=device)
+    for k in range(1 + future_len):
+        traj[k, 0] = x + k * PLAN_DT_S * vx
+        traj[k, 1] = y + k * PLAN_DT_S * vy
+        traj[k, 2] = cos_h
+        traj[k, 3] = sin_h
+
+    agent_idx = neighbor_slot
+    mean = state_normalizer.mean[agent_idx].to(device).reshape(1, 4)
+    std = state_normalizer.std[agent_idx].to(device).reshape(1, 4)
+    normed = (traj - mean) / std
+    return normed.reshape(-1)
+
+
+def build_neighbor_x0_row(
+    slot: int,
+    cache: WarmStartCache,
+    cur_anchor_xyh: torch.Tensor,
+    current_neighbor_tokens: list[str] | None,
+    neighbor_agents_past: torch.Tensor | None,
+    future_len: int,
+    state_normalizer,
+    device: torch.device,
+) -> torch.Tensor:
+    """构造单个邻车行的归一化 x0 [B, 1, flat]。"""
+    b = 1
+    flat = (1 + future_len) * 4
+    cur_tok = ""
+    if current_neighbor_tokens and slot - 1 < len(current_neighbor_tokens):
+        cur_tok = current_neighbor_tokens[slot - 1]
+
+    token_to_prev_slot: dict[str, int] = {}
+    for i, tok in enumerate(cache.neighbor_tokens):
+        if tok:
+            token_to_prev_slot[tok] = i
+
+    if cur_tok and cur_tok in token_to_prev_slot:
+        prev_row = token_to_prev_slot[cur_tok] + 1
+        nbr_cache = cache.x0_norm[:, prev_row : prev_row + 1, :]
+        return ego_shift_trajectory(nbr_cache, cache.anchor_xyh, cur_anchor_xyh)
+
+    if neighbor_agents_past is not None and state_normalizer is not None:
+        nbr_past = neighbor_agents_past[0, slot - 1]
+        row = constant_velocity_neighbor_x0(slot, nbr_past, future_len, state_normalizer, device)
+        return row.view(1, 1, flat)
+
+    return torch.zeros(b, 1, flat, device=device)
+
+
+def build_warmstart_init(
+    cache: WarmStartCache,
+    current_states: torch.Tensor,
+    cur_anchor_xyh: torch.Tensor,
+    t_start: float,
+    *,
+    current_neighbor_tokens: list[str] | None = None,
+    neighbor_agents_past: torch.Tensor | None = None,
+    future_len: int = 80,
+    state_normalizer=None,
+    sde: VPSDE_linear | None = None,
+) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+    """从缓存构造 warm-start 初始噪声态与参考 x0；无缓存则返回 (None, None)。"""
+    if cache.x0_norm is None or cache.anchor_xyh is None:
+        return None, None
+
+    b, p, _ = current_states.shape
+    device = current_states.device
+
+    ego_shifted = ego_shift_trajectory(cache.x0_norm[:, 0:1, :], cache.anchor_xyh, cur_anchor_xyh)
+    rows = [ego_shifted]
+    for slot in range(1, p):
+        rows.append(
+            build_neighbor_x0_row(
+                slot,
+                cache,
+                cur_anchor_xyh,
+                current_neighbor_tokens,
+                neighbor_agents_past,
+                future_len,
+                state_normalizer,
+                device,
+            )
+        )
+
+    x0 = torch.cat(rows, dim=1)
+    x0 = x0.reshape(b, p, -1, 4)
+    x0[:, :, 0, :] = current_states
+    ref_x0_norm = x0.reshape(b, p, -1).clone()
+    x_init = renoise_to_t(ref_x0_norm, t_start, sde=sde)
+    return x_init, ref_x0_norm
+
+
 def renoise_to_t(
     x0: torch.Tensor,
     t_start: float,
@@ -78,29 +190,25 @@ def renoise_to_t(
     return alpha * x0 + sigma * noise
 
 
-def build_warmstart_init(
-    cache: WarmStartCache,
-    current_states: torch.Tensor,
-    cur_anchor_xyh: torch.Tensor,
-    t_start: float,
-    sde: VPSDE_linear | None = None,
-) -> torch.Tensor | None:
-    """从缓存构造 warm-start 初始噪声态 x_T；无缓存则返回 None。"""
-    if cache.x0_norm is None or cache.anchor_xyh is None:
-        return None
-
-    x0 = ego_shift_trajectory(cache.x0_norm, cache.anchor_xyh, cur_anchor_xyh)
-    b, p, _ = current_states.shape
-    x0 = x0.reshape(b, p, -1, 4)
-    x0[:, :, 0, :] = current_states
-    x0 = x0.reshape(b, p, -1)
-    return renoise_to_t(x0, t_start, sde=sde)
-
-
 def update_cache(
     cache: WarmStartCache,
     x0_norm: torch.Tensor,
     anchor_xyh: torch.Tensor,
+    neighbor_tokens: list[str] | None = None,
 ) -> None:
     cache.x0_norm = x0_norm.detach()
     cache.anchor_xyh = anchor_xyh.detach()
+    cache.neighbor_tokens = list(neighbor_tokens) if neighbor_tokens else []
+
+
+def ego_max_distance_m(
+    pred_norm: torch.Tensor,
+    ref_norm: torch.Tensor,
+    state_normalizer,
+    ego_slot: int = 0,
+) -> float:
+    """重叠段 ego 轨迹逐点欧氏距离 max（物理米）。"""
+    pred = state_normalizer.inverse(pred_norm.reshape(1, 1, -1, 4))[:, ego_slot, :, :2]
+    ref = state_normalizer.inverse(ref_norm.reshape(1, 1, -1, 4))[:, ego_slot, :, :2]
+    dist = torch.linalg.norm(pred - ref, dim=-1)
+    return float(dist.max().item())
