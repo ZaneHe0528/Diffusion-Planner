@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gate_v2 特征组：仅 ego 运动学 + 邻车轻量补充。"""
+"""gate_v2 特征组：ego + 邻车 + 可选 prev_d。"""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ class GroupSpec:
     rank: int
     keys: dict = field(default_factory=dict)
     description: str = ""
+    derived: bool = False
+    default_enabled: bool = True
 
 
 FEATURE_GROUPS: list[GroupSpec] = [
@@ -27,11 +29,21 @@ FEATURE_GROUPS: list[GroupSpec] = [
         keys={"neighbor_agents_past": (32, 21, 11)},
         description="32 邻车过去 2.1s 轨迹，补 hard 交互帧",
     ),
+    GroupSpec(
+        name="prev_d",
+        rank=3,
+        keys={"prev_d": (3,)},
+        description="上一帧实测 d：[d_prev, log1p(d_prev), valid]",
+        derived=True,
+        default_enabled=False,
+    ),
 ]
 
 GROUP_BY_NAME: dict[str, GroupSpec] = {g.name: g for g in FEATURE_GROUPS}
 LABEL_KEYS = ("d", "sample_id", "scenario_id", "scenario_type")
-DEFAULT_ENABLED = [g.name for g in FEATURE_GROUPS]
+DEFAULT_ENABLED = [g.name for g in FEATURE_GROUPS if g.default_enabled]
+
+D_COLUMN_CHOICES = ("perstep_max_m", "normalized_l2_xy", "overall_l2_xy")
 
 
 def resolve_enabled_groups(enable: list[str] | None, disable: list[str] | None) -> list[str]:

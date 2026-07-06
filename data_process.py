@@ -51,6 +51,9 @@ if __name__ == "__main__":
 
     parser.add_argument('--route_len', type=int, help='number of route lane point', default=20)
     parser.add_argument('--route_num', type=int, help='number of route lanes', default=25)
+    parser.add_argument('--start_index', type=int, default=0, help='skip the first N scenarios in the loaded list')
+    parser.add_argument('--batch_size', type=int, default=0, help='process at most N scenarios (0 = no limit)')
+    parser.add_argument('--no_skip_existing', action='store_true', help='reprocess even if output npz already exists')
     args = parser.parse_args()
 
     # create save folder
@@ -73,8 +76,14 @@ if __name__ == "__main__":
 
     # process data
     del worker, builder, scenario_filter
+    if args.start_index:
+        scenarios = scenarios[args.start_index:]
+    if args.batch_size > 0:
+        scenarios = scenarios[:args.batch_size]
+    print(f"Processing {len(scenarios)} scenarios (start_index={args.start_index}, batch_size={args.batch_size or 'all'})")
+
     processor = DataProcessor(args)
-    processor.work(scenarios)
+    processor.work(scenarios, skip_existing=not args.no_skip_existing)
 
     npz_files = [f for f in os.listdir(args.save_path) if f.endswith('.npz')]
 

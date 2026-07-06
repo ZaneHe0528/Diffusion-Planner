@@ -4,18 +4,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import torch
 
-from d_to_ops import WarmStartOps, d_hat_to_warmstart_ops
+from d_to_ops import WarmStartOps, d_hat_to_warmstart_ops, level_edges_from_checkpoint
 
 
 @dataclass(frozen=True)
 class SafetyConfig:
     hard_threshold_m: float
     score_threshold_m: float
-    level_edges_m: tuple[float, ...] = (0.275, 0.696, 1.385)
+    level_edges_m: tuple[float, ...]
     neighbor_close_m: float = 12.0
     neighbor_fast_mps: float = 3.0
     neighbor_bump_levels: int = 1
@@ -24,7 +25,6 @@ class SafetyConfig:
 
 
 def neighbor_interaction_score(neighbor_agents_past: torch.Tensor | np.ndarray) -> float:
-    """邻车强交互分数 [0,1]：近 + 快 的邻车越多越高。"""
     if isinstance(neighbor_agents_past, torch.Tensor):
         x = neighbor_agents_past.detach().float().cpu().numpy()
     else:
@@ -52,21 +52,14 @@ def apply_safety(
     *,
     device: str = "cpu",
 ) -> tuple[WarmStartOps, dict]:
-    """返回保守化后的 warm-start 操作点及诊断信息。"""
     meta: dict = {"d_hat_m": float(d_hat_m), "forced_full": False, "neighbor_score": 0.0, "level_bump": 0}
+    edges = cfg.level_edges_m
 
     if d_hat_m >= cfg.score_threshold_m:
         meta["forced_full"] = True
-        ops = d_hat_to_warmstart_ops(
-            max(d_hat_m, cfg.hard_threshold_m),
-            level_edges_m=cfg.level_edges_m,
-            base_steps=cfg.base_steps,
-            use_continuous_ts=False,
-            device=device,
-        )
         return WarmStartOps(
             level=cfg.max_level,
-            d_hat_m=ops.d_hat_m,
+            d_hat_m=float(d_hat_m),
             t_start=1.0,
             steps=cfg.base_steps,
             reuse_ratio=0.0,
@@ -74,7 +67,7 @@ def apply_safety(
 
     ops = d_hat_to_warmstart_ops(
         d_hat_m,
-        level_edges_m=cfg.level_edges_m,
+        level_edges_m=edges,
         base_steps=cfg.base_steps,
         device=device,
     )
@@ -88,8 +81,8 @@ def apply_safety(
             meta["level_bump"] = bump
             level = min(level + bump, cfg.max_level)
             ops = d_hat_to_warmstart_ops(
-                cfg.level_edges_m[min(level, len(cfg.level_edges_m) - 1)],
-                level_edges_m=cfg.level_edges_m,
+                edges[min(level, len(edges) - 1)],
+                level_edges_m=edges,
                 base_steps=cfg.base_steps,
                 use_continuous_ts=False,
                 device=device,
@@ -117,11 +110,13 @@ def apply_safety(
     return ops, meta
 
 
-def safety_config_from_checkpoint(state: dict) -> SafetyConfig:
-    edges = tuple(float(x) for x in state.get("level_edges_m", (0.275, 0.696, 1.385)))
+def safety_config_from_checkpoint(state: dict[str, Any]) -> SafetyConfig:
+    edges = level_edges_from_checkpoint(state)
+    hard = float(state.get("hard_threshold_m", edges[-1] if edges else 1.0))
+    score = float(state.get("score_threshold_m", hard))
     return SafetyConfig(
-        hard_threshold_m=float(state.get("hard_threshold_m", edges[-1])),
-        score_threshold_m=float(state.get("score_threshold_m", state.get("hard_threshold_m", edges[-1]))),
+        hard_threshold_m=hard,
+        score_threshold_m=score,
         level_edges_m=edges,
         max_level=len(edges),
     )

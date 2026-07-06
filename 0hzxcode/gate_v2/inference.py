@@ -42,6 +42,7 @@ def anchor_from_ego_state(ego_state: Any) -> np.ndarray:
 def model_inputs_to_gate_batch(
     model_inputs: dict[str, torch.Tensor],
     ego_history: np.ndarray | None = None,
+    prev_d: np.ndarray | None = None,
     device: str = "cpu",
 ) -> dict[str, torch.Tensor]:
     batch = {
@@ -53,6 +54,8 @@ def model_inputs_to_gate_batch(
         batch["ego_history"] = model_inputs["ego_history"].float().unsqueeze(0).to(device)
     else:
         raise KeyError("ego_history required: pass from build_ego_history_from_ego_states")
+    if prev_d is not None:
+        batch["prev_d"] = torch.from_numpy(prev_d).float().unsqueeze(0).to(device)
     return batch
 
 
@@ -72,6 +75,8 @@ class GateWarmStartController:
         self.model: LiteGate | None = None
         self.safety: SafetyConfig | None = None
         self.cache = WarmStartCache()
+        self._prev_d_hat: float | None = None
+        self._prev_d_valid: bool = False
         if enabled and gate_ckpt is not None:
             self.model, state = load_gate(str(gate_ckpt), device=device)
             self.safety = safety_config_from_checkpoint(state)
@@ -91,7 +96,12 @@ class GateWarmStartController:
         if not self.enabled or self.model is None or self.safety is None:
             return None, {"enabled": False}
 
-        batch = model_inputs_to_gate_batch(model_inputs, ego_history=ego_history, device=self.device)
+        batch = model_inputs_to_gate_batch(
+            model_inputs,
+            ego_history=ego_history,
+            prev_d=self._build_prev_d(),
+            device=self.device,
+        )
         out = self.model(batch)
         d_hat = float(out["d_hat"].item())
         ops, meta = apply_safety(
@@ -102,7 +112,17 @@ class GateWarmStartController:
         )
         meta["enabled"] = True
         meta["level_from_gate"] = int(out["level"].item())
+        self._prev_d_hat = d_hat
+        self._prev_d_valid = True
         return ops, meta
+
+    def _build_prev_d(self) -> np.ndarray | None:
+        if self.model is None or "prev_d" not in self.model.group_order:
+            return None
+        if not self._prev_d_valid or self._prev_d_hat is None:
+            return np.array([0.0, 0.0, 0.0], dtype=np.float32)
+        d = max(self._prev_d_hat, 0.0)
+        return np.array([d, np.log1p(d), 1.0], dtype=np.float32)
 
     def prepare_warmstart(
         self,
@@ -146,3 +166,5 @@ class GateWarmStartController:
 
     def reset(self) -> None:
         self.cache = WarmStartCache()
+        self._prev_d_hat = None
+        self._prev_d_valid = False

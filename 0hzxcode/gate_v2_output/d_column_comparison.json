@@ -1,0 +1,35 @@
+[
+  {
+    "run": "perstep",
+    "d_column": "perstep_max_m",
+    "spearman": 0.6260677534044099,
+    "rmse_log1p": 0.48854079842567444,
+    "adj_acc": 0.8858723208112468,
+    "auroc": 0.6981594064806568,
+    "reuse_at_hr95": 0.2713528462779442,
+    "score_threshold": 0.26925602555274963,
+    "calibration_monotonic": true
+  },
+  {
+    "run": "norml2",
+    "d_column": "normalized_l2_xy",
+    "spearman": 0.6350573579066204,
+    "rmse_log1p": 0.3559732437133789,
+    "adj_acc": 0.8946761926711224,
+    "auroc": 0.7140639590033149,
+    "reuse_at_hr95": 0.3008066374740724,
+    "score_threshold": 0.21076318621635437,
+    "calibration_monotonic": true
+  },
+  {
+    "run": "prevd",
+    "d_column": "perstep_max_m",
+    "spearman": 0.7412385680017989,
+    "rmse_log1p": 0.43382424116134644,
+    "adj_acc": 0.9157870477068449,
+    "auroc": 0.8107768952857245,
+    "reuse_at_hr95": 0.3676884074671583,
+    "score_threshold": 0.5248348116874695,
+    "calibration_monotonic": true
+  }
+]

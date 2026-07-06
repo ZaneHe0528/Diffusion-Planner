@@ -106,6 +106,8 @@ class LiteGate(nn.Module):
                 branches[name] = _mlp(21 * 7 + EGO_DERIVED_DIM, cfg.token_hidden, cfg.embed_dim, cfg.dropout)
             elif name == "neighbor_agents":
                 branches[name] = TokenBranch(21 * 11, cfg)
+            elif name == "prev_d":
+                branches[name] = _mlp(3, 32, cfg.embed_dim, cfg.dropout)
             else:
                 raise ValueError(f"unknown group {name}")
         self.branches = nn.ModuleDict(branches)
@@ -130,7 +132,11 @@ class LiteGate(nn.Module):
         self.register_buffer("score_threshold_m", torch.zeros(1))
 
     def _group_feat_dim(self, name: str) -> int:
-        return {"ego_history": 21 * 7 + EGO_DERIVED_DIM, "neighbor_agents": 21 * 11}[name]
+        return {
+            "ego_history": 21 * 7 + EGO_DERIVED_DIM,
+            "neighbor_agents": 21 * 11,
+            "prev_d": 3,
+        }[name]
 
     def group_features(self, name: str, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor | None]:
         if name == "ego_history":
@@ -141,6 +147,8 @@ class LiteGate(nn.Module):
             x = batch["neighbor_agents_past"].float()
             valid = x.abs().sum(dim=(2, 3)) > 0
             return x.reshape(x.shape[0], x.shape[1], -1), valid
+        if name == "prev_d":
+            return batch["prev_d"].float(), None
         raise ValueError(name)
 
     def _normalize(self, name: str, feat: torch.Tensor, valid: torch.Tensor | None) -> torch.Tensor:

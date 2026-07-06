@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from tqdm import tqdm
 
@@ -76,12 +78,18 @@ class DataProcessor(object):
 
         return data
     
+    def _output_path(self, map_name, token):
+        return os.path.join(self._save_dir, f"{map_name}_{token}.npz")
+
     # Use for data preprocess
-    def work(self, scenarios):
+    def work(self, scenarios, skip_existing=True):
 
         for scenario in tqdm(scenarios):
             map_name = scenario._map_name
             token = scenario.token
+            if skip_existing and os.path.exists(self._output_path(map_name, token)):
+                continue
+
             map_api = scenario.map_api        
 
             '''
@@ -157,4 +165,4 @@ class DataProcessor(object):
             self.save_to_disk(self._save_dir, data)
 
     def save_to_disk(self, dir, data):
-        np.savez(f"{dir}/{data['map_name']}_{data['token']}.npz", **data)
+        np.savez(self._output_path(data['map_name'], data['token']), **data)

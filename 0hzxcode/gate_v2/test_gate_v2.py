@@ -17,16 +17,19 @@ from safety import SafetyConfig, apply_safety, neighbor_interaction_score
 from warmstart import WarmStartCache, build_warmstart_init, ego_shift_trajectory, renoise_to_t
 
 
+EDGES = (0.275, 0.696, 1.385)
+
+
 def test_d_to_level():
-    assert d_to_level(0.1) == 0
-    assert d_to_level(0.5) == 1
-    assert d_to_level(1.0) == 2
-    assert d_to_level(2.0) == 3
+    assert d_to_level(0.1, EDGES) == 0
+    assert d_to_level(0.5, EDGES) == 1
+    assert d_to_level(1.0, EDGES) == 2
+    assert d_to_level(2.0, EDGES) == 3
 
 
 def test_d_hat_monotonic_ops():
-    ops_low = d_hat_to_warmstart_ops(0.05, use_continuous_ts=True)
-    ops_high = d_hat_to_warmstart_ops(1.5, use_continuous_ts=False)
+    ops_low = d_hat_to_warmstart_ops(0.05, level_edges_m=EDGES, use_continuous_ts=True)
+    ops_high = d_hat_to_warmstart_ops(1.5, level_edges_m=EDGES, use_continuous_ts=False)
     assert ops_low.t_start < ops_high.t_start
     assert ops_low.steps <= ops_high.steps
 

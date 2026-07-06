@@ -4,15 +4,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 
 import diffusion_planner.model.diffusion_utils.dpm_solver_pytorch as dpm
 
-# 全量 normalized-L2 分位（米/步，perstep_max_m 口径）
-DEFAULT_LEVEL_EDGES_M = (0.275, 0.696, 1.385)
-
-# 每档 (t_s 占 T 的比例, 去噪步数)
 DEFAULT_LEVEL_OPS = (
     (0.12, 2),
     (0.35, 4),
@@ -30,7 +27,19 @@ class WarmStartOps:
     reuse_ratio: float
 
 
-def d_to_level(d_hat_m: float, level_edges_m: tuple[float, ...] = DEFAULT_LEVEL_EDGES_M) -> int:
+def level_edges_from_checkpoint(state: dict[str, Any]) -> tuple[float, ...]:
+    edges = state.get("level_edges_m")
+    if edges is None:
+        raise KeyError("checkpoint missing level_edges_m; retrain with gate_v2 train_gate.py")
+    return tuple(float(x) for x in edges)
+
+
+def d_column_from_checkpoint(state: dict[str, Any]) -> str:
+    args = state.get("args", {})
+    return str(args.get("d_column", state.get("d_column", "perstep_max_m")))
+
+
+def d_to_level(d_hat_m: float, level_edges_m: tuple[float, ...]) -> int:
     level = 0
     for edge in level_edges_m:
         if d_hat_m > edge:
@@ -39,7 +48,6 @@ def d_to_level(d_hat_m: float, level_edges_m: tuple[float, ...] = DEFAULT_LEVEL_
 
 
 def meters_to_sigma_norm(d_hat_m: float, xy_std_m: float = 20.0) -> float:
-    """把米制 d 折算到归一化状态空间的噪声尺度（近似）。"""
     return max(d_hat_m / max(xy_std_m, 1e-6), 0.0)
 
 
@@ -52,7 +60,6 @@ def sigma_to_t_start(
     t_max: float = 1.0,
     device: str = "cpu",
 ) -> float:
-    """反解 VP 调度：marginal_std(t) ~= sigma_target。"""
     if sigma_target <= 1e-6:
         return 1e-3
     if sigma_target >= 0.999:
@@ -84,7 +91,7 @@ def level_to_ops(level: int, base_steps: int = 10, t_max: float = 1.0) -> tuple[
 def d_hat_to_warmstart_ops(
     d_hat_m: float,
     *,
-    level_edges_m: tuple[float, ...] = DEFAULT_LEVEL_EDGES_M,
+    level_edges_m: tuple[float, ...],
     xy_std_m: float = 20.0,
     base_steps: int = 10,
     t_max: float = 1.0,
@@ -108,4 +115,21 @@ def d_hat_to_warmstart_ops(
         t_start=t_start,
         steps=int(max(2, steps)),
         reuse_ratio=reuse_ratio,
+    )
+
+
+def d_hat_to_warmstart_ops_from_checkpoint(
+    d_hat_m: float,
+    state: dict[str, Any],
+    *,
+    base_steps: int = 10,
+    use_continuous_ts: bool = True,
+    device: str = "cpu",
+) -> WarmStartOps:
+    return d_hat_to_warmstart_ops(
+        d_hat_m,
+        level_edges_m=level_edges_from_checkpoint(state),
+        base_steps=base_steps,
+        use_continuous_ts=use_continuous_ts,
+        device=device,
     )
