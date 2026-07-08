@@ -206,17 +206,16 @@ def get_current_roadblock_candidates(
 
         for lane in roadblock.interior_edges:
             lane_discrete_path: List[StateSE2] = lane.baseline_path.discrete_path
-            lane_discrete_points = np.array(
-                [state.point.array for state in lane_discrete_path], dtype=np.float64
-            )
-            lane_state_distances = (
-                (lane_discrete_points - ego_pose.point.array[None, ...]) ** 2.0
-            ).sum(axis=-1) ** 0.5
-            argmin = np.argmin(lane_state_distances)
+            if not lane_discrete_path:
+                continue
+            ego_x, ego_y = float(ego_pose.x), float(ego_pose.y)
+            lane_state_distances = [
+                ((float(state.x) - ego_x) ** 2.0 + (float(state.y) - ego_y) ** 2.0) ** 0.5
+                for state in lane_discrete_path
+            ]
+            argmin = min(range(len(lane_state_distances)), key=lane_state_distances.__getitem__)
 
-            heading_error = np.abs(
-                normalize_angle(lane_discrete_path[argmin].heading - ego_pose.heading)
-            )
+            heading_error = abs(normalize_angle(lane_discrete_path[argmin].heading - ego_pose.heading))
             displacement_error = lane_state_distances[argmin]
 
             if displacement_error < lane_displacement_error:
@@ -240,16 +239,22 @@ def get_current_roadblock_candidates(
         roadblock_heading_errors.append(lane_heading_error)
 
     if on_route_candidates:  # prefer on-route roadblocks
+        argmin = min(
+            range(len(on_route_candidate_displacement_errors)),
+            key=on_route_candidate_displacement_errors.__getitem__,
+        )
         return (
-            on_route_candidates[np.argmin(on_route_candidate_displacement_errors)],
+            on_route_candidates[argmin],
             on_route_candidates,
         )
     elif candidates:  # fallback to most promising candidate
-        return candidates[np.argmin(candidate_displacement_errors)], candidates
+        argmin = min(range(len(candidate_displacement_errors)), key=candidate_displacement_errors.__getitem__)
+        return candidates[argmin], candidates
 
     # otherwise, just find any close roadblock
+    argmin = min(range(len(roadblock_displacement_errors)), key=roadblock_displacement_errors.__getitem__)
     return (
-        roadblock_candidates[np.argmin(roadblock_displacement_errors)],
+        roadblock_candidates[argmin],
         roadblock_candidates,
     )
 
@@ -311,9 +316,7 @@ def route_roadblock_correction(
             )
 
             if path_found:
-                end_roadblock_idx = np.argmax(
-                    np.array(route_roadblock_ids) == path_id[-1]
-                )
+                end_roadblock_idx = route_roadblock_ids.index(path_id[-1])
 
                 route_roadblocks = route_roadblocks[end_roadblock_idx + 1 :]
                 route_roadblock_ids = route_roadblock_ids[end_roadblock_idx + 1 :]

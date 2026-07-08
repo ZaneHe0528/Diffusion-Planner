@@ -45,17 +45,28 @@ def model_inputs_to_gate_batch(
     prev_d: np.ndarray | None = None,
     device: str = "cpu",
 ) -> dict[str, torch.Tensor]:
+    def _batched_tensor(x, expected_dim: int) -> torch.Tensor:
+        if isinstance(x, np.ndarray):
+            t = torch.from_numpy(x).float()
+        else:
+            t = x.float()
+        if t.dim() == expected_dim - 1:
+            t = t.unsqueeze(0)
+        if t.dim() != expected_dim:
+            raise ValueError(f"expected {expected_dim - 1}D or {expected_dim}D tensor, got shape {tuple(t.shape)}")
+        return t.to(device)
+
     batch = {
-        "neighbor_agents_past": model_inputs["neighbor_agents_past"].float().unsqueeze(0).to(device),
+        "neighbor_agents_past": _batched_tensor(model_inputs["neighbor_agents_past"], 4),
     }
     if ego_history is not None:
-        batch["ego_history"] = torch.from_numpy(ego_history).float().unsqueeze(0).to(device)
+        batch["ego_history"] = _batched_tensor(ego_history, 3)
     elif "ego_history" in model_inputs:
-        batch["ego_history"] = model_inputs["ego_history"].float().unsqueeze(0).to(device)
+        batch["ego_history"] = _batched_tensor(model_inputs["ego_history"], 3)
     else:
         raise KeyError("ego_history required: pass from build_ego_history_from_ego_states")
     if prev_d is not None:
-        batch["prev_d"] = torch.from_numpy(prev_d).float().unsqueeze(0).to(device)
+        batch["prev_d"] = _batched_tensor(prev_d, 2)
     return batch
 
 
@@ -183,7 +194,12 @@ class GateWarmStartController:
             sde=sde,
         )
         if x_init is None:
-            return None
+            return {
+                "forced_full": True,
+                "cache_miss": True,
+                "return_x0_norm": True,
+                "meta": meta,
+            }
 
         epsilon_m = float(self.safety.hard_threshold_m) if self.safety is not None else float("inf")
         return {

@@ -30,25 +30,28 @@ def _extract_agent_array(tracked_objects, track_token_ids, object_types):
     """
     agents = tracked_objects.get_tracked_objects_of_types(object_types)
     agent_types = []
-    output = np.zeros((len(agents), AgentInternalIndex.dim()), dtype=np.float64)
+    rows = []
     max_agent_id = len(track_token_ids)
 
-    for idx, agent in enumerate(agents):
+    for agent in agents:
         if agent.track_token not in track_token_ids:
             track_token_ids[agent.track_token] = max_agent_id
             max_agent_id += 1
         track_token_int = track_token_ids[agent.track_token]
 
-        output[idx, AgentInternalIndex.track_token()] = float(track_token_int)
-        output[idx, AgentInternalIndex.vx()] = agent.velocity.x
-        output[idx, AgentInternalIndex.vy()] = agent.velocity.y
-        output[idx, AgentInternalIndex.heading()] = agent.center.heading
-        output[idx, AgentInternalIndex.width()] = agent.box.width
-        output[idx, AgentInternalIndex.length()] = agent.box.length
-        output[idx, AgentInternalIndex.x()] = agent.center.x
-        output[idx, AgentInternalIndex.y()] = agent.center.y
+        row = [0.0] * AgentInternalIndex.dim()
+        row[int(AgentInternalIndex.track_token())] = float(track_token_int)
+        row[int(AgentInternalIndex.vx())] = float(agent.velocity.x)
+        row[int(AgentInternalIndex.vy())] = float(agent.velocity.y)
+        row[int(AgentInternalIndex.heading())] = float(agent.center.heading)
+        row[int(AgentInternalIndex.width())] = float(agent.box.width)
+        row[int(AgentInternalIndex.length())] = float(agent.box.length)
+        row[int(AgentInternalIndex.x())] = float(agent.center.x)
+        row[int(AgentInternalIndex.y())] = float(agent.center.y)
+        rows.append(row)
         agent_types.append(agent.tracked_object_type)
 
+    output = np.asarray(rows, dtype=np.float64) if rows else np.empty((0, AgentInternalIndex.dim()), dtype=np.float64)
     return output, track_token_ids, agent_types
 
 
@@ -112,22 +115,22 @@ def _filter_agents_array(agents, reverse: bool = False):
     :return: filtered agents in the same format as the input `agents` parameter
     """
     target_array = agents[-1] if reverse else agents[0]
+    track_token_col = int(AgentInternalIndex.track_token())
+    target_ids = (
+        set(float(agent_id) for agent_id in target_array[:, track_token_col].tolist())
+        if target_array.shape[0] > 0
+        else set()
+    )
     for i in range(len(agents)):
-
+        frame = agents[i]
         rows = []
-        for j in range(agents[i].shape[0]):
-            if target_array.shape[0] > 0:
-                agent_id: float = float(agents[i][j, int(AgentInternalIndex.track_token())])
-                is_in_target_frame: bool = bool(
-                    (agent_id == target_array[:, AgentInternalIndex.track_token()]).max()
-                )
-                if is_in_target_frame:
-                    rows.append(agents[i][j, :].squeeze())
+        if target_ids and frame.shape[0] > 0:
+            rows = [row for row in frame.tolist() if float(row[track_token_col]) in target_ids]
 
-        if len(rows) > 0:
-            agents[i] = np.stack(rows)
+        if rows:
+            agents[i] = np.asarray(rows, dtype=frame.dtype)
         else:
-            agents[i] = np.empty((0, agents[i].shape[1]), dtype=np.float32)
+            agents[i] = np.empty((0, frame.shape[1]), dtype=frame.dtype)
 
     return agents
 
@@ -368,4 +371,3 @@ def agent_future_process(anchor_ego_state, future_tracked_objects, num_agents, a
         agent_futures[i] = padded_agent_states[1:, j, [AgentInternalIndex.x(), AgentInternalIndex.y(), AgentInternalIndex.heading()]]
 
     return agent_futures
-

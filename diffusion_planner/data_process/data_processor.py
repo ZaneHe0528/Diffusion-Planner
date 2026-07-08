@@ -37,7 +37,15 @@ class DataProcessor(object):
         self._max_points = {'LANE': config.lane_len, 'LEFT_BOUNDARY': config.lane_len, 'RIGHT_BOUNDARY': config.lane_len, 'ROUTE_LANES': config.route_len} # maximum number of points per feature to extract per feature layer.
 
     # Use for inference
-    def observation_adapter(self, history_buffer, traffic_light_data, map_api, route_roadblock_ids, device='cpu'):
+    def observation_adapter(
+        self,
+        history_buffer,
+        traffic_light_data,
+        map_api,
+        route_roadblock_ids,
+        device='cpu',
+        return_neighbor_tokens: bool = False,
+    ):
 
         '''
         ego
@@ -76,7 +84,9 @@ class DataProcessor(object):
         data.update(vector_map)
         data = convert_to_model_inputs(data, device)
 
-        return data, selected_neighbor_tokens
+        if return_neighbor_tokens:
+            return data, selected_neighbor_tokens
+        return data
     
     def _output_path(self, map_name, token):
         return os.path.join(self._save_dir, f"{map_name}_{token}.npz")
@@ -148,7 +158,7 @@ class DataProcessor(object):
             ]
 
             sampled_future_observations = [present_tracked_objects] + future_tracked_objects
-            future_tracked_objects_array_list, _ = sampled_tracked_objects_to_array_list(sampled_future_observations)
+            future_tracked_objects_array_list, _, _ = sampled_tracked_objects_to_array_list(sampled_future_observations)
             neighbor_agents_future = agent_future_process(anchor_ego_state, future_tracked_objects_array_list, self.num_agents, neighbor_indices)
 
 

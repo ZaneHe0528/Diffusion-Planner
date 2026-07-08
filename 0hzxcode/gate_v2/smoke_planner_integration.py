@@ -42,9 +42,11 @@ def main():
         "neighbor_agents_past": torch.randn(b, config.agent_num, 21, 11, device=device) * 0.01,
         "static_objects": torch.zeros(b, config.static_objects_num, 10, device=device),
         "lanes": torch.zeros(b, config.lane_num, config.lane_len, 12, device=device),
+        "lanes_speed_limit": torch.zeros(b, config.lane_num, 1, device=device),
+        "lanes_has_speed_limit": torch.zeros(b, config.lane_num, 1, dtype=torch.bool, device=device),
         "route_lanes": torch.zeros(b, config.route_num, config.route_len, 12, device=device),
     }
-    config.observation_normalizer(inputs)
+    inputs = config.observation_normalizer(inputs)
 
     controller = GateWarmStartController(
         gate_ckpt,
@@ -65,7 +67,7 @@ def main():
     tokens = [f"tok_{i}" for i in range(config.agent_num)]
 
     with torch.no_grad():
-        _, out0 = model(inputs)
+        _, out0 = model(inputs, warmstart={"return_x0_norm": True, "forced_full": True})
         assert "prediction" in out0
         controller.on_decode(out0["x0_norm"], anchor, neighbor_tokens=tokens)
 

@@ -52,10 +52,16 @@ def apply_safety(
     *,
     device: str = "cpu",
 ) -> tuple[WarmStartOps, dict]:
-    meta: dict = {"d_hat_m": float(d_hat_m), "forced_full": False, "neighbor_score": 0.0, "level_bump": 0}
+    meta: dict = {
+        "d_hat_m": float(d_hat_m),
+        "forced_full": False,
+        "score_alarm": bool(d_hat_m >= cfg.score_threshold_m),
+        "neighbor_score": 0.0,
+        "level_bump": 0,
+    }
     edges = cfg.level_edges_m
 
-    if d_hat_m >= cfg.score_threshold_m:
+    if d_hat_m >= cfg.hard_threshold_m:
         meta["forced_full"] = True
         return WarmStartOps(
             level=cfg.max_level,

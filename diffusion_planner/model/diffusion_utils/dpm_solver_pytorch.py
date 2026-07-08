@@ -1243,6 +1243,8 @@ class DPM_Solver:
                 raise ValueError("Got wrong method {}".format(method))
             if denoise_to_zero:
                 t = torch.ones((1,)).to(device) * t_0
+                if nfe_counter is not None:
+                    nfe_counter[0] += 1
                 x = self.denoise_to_zero_fn(x, t)
                 if self.correcting_xt_fn is not None:
                     x = self.correcting_xt_fn(x, t, step + 1)

@@ -102,7 +102,6 @@ class Decoder(nn.Module):
                 }
         else:
             diffusion_steps = 10
-            sample_params = {}
             warmstart_meta = {}
 
             def initial_state_constraint(xt, t, step):
@@ -117,9 +116,7 @@ class Decoder(nn.Module):
                 ).reshape(B, P, -1)
 
             def _run_sampler(xT, steps, extra_sample_params=None):
-                params = dict(sample_params)
-                if extra_sample_params:
-                    params.update(extra_sample_params)
+                params = dict(extra_sample_params or {})
                 nfe_holder = {}
                 params["nfe_holder"] = nfe_holder
                 x0_out = dpm_sampler(
@@ -160,11 +157,10 @@ class Decoder(nn.Module):
                 x_init = warmstart["x_init"]
                 diffusion_steps = int(warmstart.get("steps", diffusion_steps))
                 t_start = float(warmstart.get("t_start", 1.0))
-                sample_params["t_start"] = t_start
                 epsilon_m = float(warmstart.get("epsilon_m", float("inf")))
                 ref_x0_norm = warmstart.get("ref_x0_norm")
 
-                model_fn, _, _ = build_dpm_solver_bundle(
+                _, _, first_solver = build_dpm_solver_bundle(
                     self.dit,
                     other_model_params={
                         "cross_c": ego_neighbor_encoding,
@@ -191,23 +187,19 @@ class Decoder(nn.Module):
                 )
 
                 t_tensor = torch.full((B,), t_start, device=current_states.device, dtype=x_init.dtype)
-                first_model_output = model_fn(x_init, t_tensor)
+                first_model_output = first_solver.model_fn(x_init, t_tensor)
+                first_model_output = first_model_output.reshape(B, P, -1, 4)
+                first_model_output[:, :, 0, :] = current_states
+                first_model_output = first_model_output.reshape(B, P, -1)
                 validation_nfe = 1
 
                 passive_fallback = False
                 d_meas = None
                 if ref_x0_norm is not None and epsilon_m < float("inf"):
-                    x_start_hat = self.dit(
-                        x_init,
-                        t_tensor,
-                        ego_neighbor_encoding,
-                        route_lanes,
-                        neighbor_current_mask,
-                    )
-                    pred_phys = self._state_normalizer.inverse(x_start_hat.reshape(B, P, -1, 4))
+                    pred_phys = self._state_normalizer.inverse(first_model_output.reshape(B, P, -1, 4))
                     ref_phys = self._state_normalizer.inverse(ref_x0_norm.reshape(B, P, -1, 4))
                     dist = torch.linalg.norm(
-                        pred_phys[:, 0, :, :2] - ref_phys[:, 0, :, :2],
+                        pred_phys[:, 0, 1:, :2] - ref_phys[:, 0, 1:, :2],
                         dim=-1,
                     )
                     d_meas = float(dist.max().item())
@@ -218,14 +210,14 @@ class Decoder(nn.Module):
                 if passive_fallback:
                     warmstart_meta["passive_fallback"] = True
                     xT = _build_xT_full_noise()
-                    x0 = _run_sampler(xT, 10)
+                    x0 = _run_sampler(xT, 10, extra_sample_params={"t_start": 1.0})
                     warmstart_meta["nfe"] = validation_nfe + int(warmstart_meta.get("nfe", 10))
                 else:
                     warmstart_meta["passive_fallback"] = False
                     x0 = _run_sampler(
                         x_init,
                         diffusion_steps,
-                        extra_sample_params={"first_model_output": first_model_output},
+                        extra_sample_params={"t_start": t_start, "first_model_output": first_model_output},
                     )
                     warmstart_meta["nfe"] = validation_nfe + int(warmstart_meta.get("nfe", diffusion_steps))
             else:

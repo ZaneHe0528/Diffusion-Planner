@@ -32,10 +32,51 @@ if str(GATE_V2_ROOT) not in sys.path:
 
 DIAG_ROOT = Path(__file__).resolve().parents[2] / "0hzxcode" / "gate_v2_output" / "val14_closedloop"
 _scenario_counter = 0
+_PLANNER_MODEL_CACHE: Dict[tuple, Diffusion_Planner] = {}
 
 
 def identity(ego_state, predictions):
     return predictions
+
+
+def _load_cached_planner_model(
+    config: Config,
+    ckpt_path: Optional[str],
+    device: str,
+    enable_ema: bool,
+) -> Diffusion_Planner:
+    key = (
+        str(ckpt_path) if ckpt_path is not None else "__random__",
+        device,
+        bool(enable_ema),
+        int(config.future_len),
+        int(config.predicted_neighbor_num),
+    )
+    if key in _PLANNER_MODEL_CACHE:
+        return _PLANNER_MODEL_CACHE[key]
+
+    planner = Diffusion_Planner(config)
+    if ckpt_path is not None:
+        state_dict: Dict = torch.load(ckpt_path, map_location=device)
+
+        if enable_ema:
+            state_dict = state_dict["ema_state_dict"]
+        elif "model" in state_dict.keys():
+            state_dict = state_dict["model"]
+
+        model_state_dict = {
+            k[len("module.") :]: v
+            for k, v in state_dict.items()
+            if k.startswith("module.")
+        }
+        planner.load_state_dict(model_state_dict)
+    else:
+        print("load random model")
+
+    planner.eval()
+    planner = planner.to(device)
+    _PLANNER_MODEL_CACHE[key] = planner
+    return planner
 
 
 class DiffusionPlanner(AbstractPlanner):
@@ -69,7 +110,7 @@ class DiffusionPlanner(AbstractPlanner):
         self._ema_enabled = enable_ema
         self._device = device
 
-        self._planner = Diffusion_Planner(config)
+        self._planner = _load_cached_planner_model(config, ckpt_path, device, enable_ema)
 
         self.data_processor = DataProcessor(config)
         
@@ -111,22 +152,7 @@ class DiffusionPlanner(AbstractPlanner):
         self._map_api = initialization.map_api
         self._route_roadblock_ids = initialization.route_roadblock_ids
 
-        if self._ckpt_path is not None:
-            state_dict:Dict = torch.load(self._ckpt_path, map_location=self._device)
-            
-            if self._ema_enabled:
-                state_dict = state_dict['ema_state_dict']
-            else:
-                if "model" in state_dict.keys():
-                    state_dict = state_dict['model']
-            # use for ddp
-            model_state_dict = {k[len("module."):]: v for k, v in state_dict.items() if k.startswith("module.")}
-            self._planner.load_state_dict(model_state_dict)
-        else:
-            print("load random model")
-        
         self._planner.eval()
-        self._planner = self._planner.to(self._device)
         self._initialization = initialization
 
         if self._gate_controller is not None:
@@ -139,7 +165,12 @@ class DiffusionPlanner(AbstractPlanner):
         history = planner_input.history
         traffic_light_data = list(planner_input.traffic_light_data)
         model_inputs, selected_neighbor_tokens = self.data_processor.observation_adapter(
-            history, traffic_light_data, self._map_api, self._route_roadblock_ids, self._device
+            history,
+            traffic_light_data,
+            self._map_api,
+            self._route_roadblock_ids,
+            self._device,
+            return_neighbor_tokens=True,
         )
         return model_inputs, selected_neighbor_tokens
 
@@ -165,8 +196,8 @@ class DiffusionPlanner(AbstractPlanner):
         """
         Inherited.
         """
-        inputs, selected_neighbor_tokens = self.planner_input_to_model_inputs(current_input)
-        inputs = self.observation_normalizer(inputs)
+        raw_inputs, selected_neighbor_tokens = self.planner_input_to_model_inputs(current_input)
+        inputs = self.observation_normalizer(raw_inputs)
 
         warmstart = None
         gate_meta: Dict = {}
@@ -176,7 +207,7 @@ class DiffusionPlanner(AbstractPlanner):
             ego_states = list(current_input.history.ego_states)
             ego_history = build_ego_history_from_ego_states(ego_states)
             anchor = anchor_from_ego_state(ego_states[-1])
-            ops, gate_meta = self._gate_controller.predict_ops(inputs, ego_history=ego_history)
+            ops, gate_meta = self._gate_controller.predict_ops(raw_inputs, ego_history=ego_history)
             self._last_gate_meta = gate_meta
 
             ego_current = inputs["ego_current_state"][:, None, :4]
@@ -187,7 +218,7 @@ class DiffusionPlanner(AbstractPlanner):
                 current_states,
                 anchor,
                 neighbor_tokens=selected_neighbor_tokens,
-                neighbor_agents_past=inputs["neighbor_agents_past"],
+                neighbor_agents_past=raw_inputs["neighbor_agents_past"],
                 sde=self._planner.sde,
             )
 
@@ -219,7 +250,8 @@ class DiffusionPlanner(AbstractPlanner):
                 "level": gate_meta.get("level", gate_meta.get("level_from_gate")),
                 "t_start": gate_meta.get("t_start"),
                 "steps": gate_meta.get("steps"),
-                "forced_full": bool(gate_meta.get("forced_full", False)),
+                "forced_full": bool(gate_meta.get("forced_full", False) or ws_meta.get("forced_full", False)),
+                "cache_miss": bool(warmstart.get("cache_miss", False)) if warmstart is not None else False,
                 "passive_fallback": bool(ws_meta.get("passive_fallback", False)),
                 "d_meas_m": ws_meta.get("d_meas_m"),
                 "epsilon_m": ws_meta.get("epsilon_m"),

@@ -26,22 +26,22 @@ def _rotate_xy(xy: torch.Tensor, dh: torch.Tensor) -> torch.Tensor:
 
 
 def ego_shift_trajectory(
-    x0_norm: torch.Tensor,
+    trajectory: torch.Tensor,
     prev_anchor_xyh: torch.Tensor,
     cur_anchor_xyh: torch.Tensor,
 ) -> torch.Tensor:
-    """把上一帧归一化轨迹 x0 对齐到当前 ego 帧。
+    """把上一帧物理坐标轨迹对齐到当前 ego 帧。
 
-    x0_norm: [B, P, T*4] 或 [B, P, T, 4]
+    trajectory: [B, P, T*4] 或 [B, P, T, 4]
     anchor: [B, 3] = x, y, heading
     """
-    orig_shape = x0_norm.shape
-    if x0_norm.dim() == 3 and orig_shape[-1] % 4 == 0:
-        b, p, flat = x0_norm.shape
+    orig_shape = trajectory.shape
+    if trajectory.dim() == 3 and orig_shape[-1] % 4 == 0:
+        b, p, flat = trajectory.shape
         t = flat // 4
-        x = x0_norm.reshape(b, p, t, 4)
+        x = trajectory.reshape(b, p, t, 4)
     else:
-        x = x0_norm
+        x = trajectory
         b, p, t, _ = x.shape
 
     dx = prev_anchor_xyh[:, 0] - cur_anchor_xyh[:, 0]
@@ -61,6 +61,53 @@ def ego_shift_trajectory(
     if len(orig_shape) == 3:
         return out.reshape(b, p, -1)
     return out
+
+
+def _slot_mean_std(state_normalizer, slot: int, device: torch.device, dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor]:
+    mean = state_normalizer.mean[slot].to(device=device, dtype=dtype).reshape(1, 1, 1, 4)
+    std = state_normalizer.std[slot].to(device=device, dtype=dtype).reshape(1, 1, 1, 4)
+    return mean, std
+
+
+def denormalize_slot_trajectory(x0_norm: torch.Tensor, state_normalizer, slot: int) -> torch.Tensor:
+    orig_shape = x0_norm.shape
+    if x0_norm.dim() == 3:
+        b, p, flat = x0_norm.shape
+        x = x0_norm.reshape(b, p, flat // 4, 4)
+    else:
+        x = x0_norm
+    mean, std = _slot_mean_std(state_normalizer, slot, x.device, x.dtype)
+    out = x * std + mean
+    if len(orig_shape) == 3:
+        return out.reshape(orig_shape)
+    return out
+
+
+def normalize_slot_trajectory(x0_phys: torch.Tensor, state_normalizer, slot: int) -> torch.Tensor:
+    orig_shape = x0_phys.shape
+    if x0_phys.dim() == 3:
+        b, p, flat = x0_phys.shape
+        x = x0_phys.reshape(b, p, flat // 4, 4)
+    else:
+        x = x0_phys
+    mean, std = _slot_mean_std(state_normalizer, slot, x.device, x.dtype)
+    out = (x - mean) / std
+    if len(orig_shape) == 3:
+        return out.reshape(orig_shape)
+    return out
+
+
+def ego_shift_normalized_trajectory(
+    x0_norm: torch.Tensor,
+    prev_anchor_xyh: torch.Tensor,
+    cur_anchor_xyh: torch.Tensor,
+    state_normalizer,
+    prev_slot: int,
+    cur_slot: int,
+) -> torch.Tensor:
+    x0_phys = denormalize_slot_trajectory(x0_norm, state_normalizer, prev_slot)
+    shifted_phys = ego_shift_trajectory(x0_phys, prev_anchor_xyh, cur_anchor_xyh)
+    return normalize_slot_trajectory(shifted_phys, state_normalizer, cur_slot)
 
 
 def constant_velocity_neighbor_x0(
@@ -88,9 +135,8 @@ def constant_velocity_neighbor_x0(
         traj[k, 3] = sin_h
 
     agent_idx = neighbor_slot
-    mean = state_normalizer.mean[agent_idx].to(device).reshape(1, 4)
-    std = state_normalizer.std[agent_idx].to(device).reshape(1, 4)
-    normed = (traj - mean) / std
+    mean, std = _slot_mean_std(state_normalizer, agent_idx, device, traj.dtype)
+    normed = (traj.view(1, 1, 1 + future_len, 4) - mean) / std
     return normed.reshape(-1)
 
 
@@ -119,7 +165,14 @@ def build_neighbor_x0_row(
     if cur_tok and cur_tok in token_to_prev_slot:
         prev_row = token_to_prev_slot[cur_tok] + 1
         nbr_cache = cache.x0_norm[:, prev_row : prev_row + 1, :]
-        return ego_shift_trajectory(nbr_cache, cache.anchor_xyh, cur_anchor_xyh)
+        return ego_shift_normalized_trajectory(
+            nbr_cache,
+            cache.anchor_xyh,
+            cur_anchor_xyh,
+            state_normalizer,
+            prev_slot=prev_row,
+            cur_slot=slot,
+        )
 
     if neighbor_agents_past is not None and state_normalizer is not None:
         nbr_past = neighbor_agents_past[0, slot - 1]
@@ -148,7 +201,17 @@ def build_warmstart_init(
     b, p, _ = current_states.shape
     device = current_states.device
 
-    ego_shifted = ego_shift_trajectory(cache.x0_norm[:, 0:1, :], cache.anchor_xyh, cur_anchor_xyh)
+    if state_normalizer is None:
+        return None, None
+
+    ego_shifted = ego_shift_normalized_trajectory(
+        cache.x0_norm[:, 0:1, :],
+        cache.anchor_xyh,
+        cur_anchor_xyh,
+        state_normalizer,
+        prev_slot=0,
+        cur_slot=0,
+    )
     rows = [ego_shifted]
     for slot in range(1, p):
         rows.append(
@@ -181,13 +244,10 @@ def renoise_to_t(
     """x_{t_s} = alpha(t_s)*x0 + sigma(t_s)*noise。"""
     sde = sde or VPSDE_linear()
     t = torch.full((x0.shape[0],), float(t_start), device=x0.device, dtype=x0.dtype)
-    alpha, sigma = sde.marginal_prob(x0, t)
-    while alpha.dim() < x0.dim():
-        alpha = alpha.unsqueeze(-1)
-        sigma = sigma.unsqueeze(-1)
+    mean, sigma = sde.marginal_prob(x0, t)
     if noise is None:
         noise = torch.randn_like(x0)
-    return alpha * x0 + sigma * noise
+    return mean + sigma * noise
 
 
 def update_cache(

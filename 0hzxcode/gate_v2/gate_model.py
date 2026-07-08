@@ -244,9 +244,17 @@ class LiteGate(nn.Module):
 
 
 def load_gate(path, device: str = "cpu") -> tuple[LiteGate, dict]:
+    key = (str(path), device)
+    if not hasattr(load_gate, "_cache"):
+        load_gate._cache = {}
+    cache = load_gate._cache
+    if key in cache:
+        return cache[key]
+
     state = torch.load(path, map_location=device, weights_only=False)
     cfg = GateConfig(**state["config"])
     model = LiteGate(cfg).to(device)
     model.load_state_dict(state["model_state_dict"])
     model.eval()
-    return model, state
+    cache[key] = (model, state)
+    return cache[key]

@@ -355,7 +355,7 @@ class GateDataProcessor:
             if len(future_tracked_objects) != self.num_future_poses:
                 raise ValueError(f"expected {self.num_future_poses} future object frames, got {len(future_tracked_objects)}")
             sampled_future_observations = [present_tracked_objects] + future_tracked_objects
-            future_tracked_objects_array_list, _ = sampled_tracked_objects_to_array_list(sampled_future_observations)
+            future_tracked_objects_array_list, _, _ = sampled_tracked_objects_to_array_list(sampled_future_observations)
             neighbor_agents_future = agent_future_process(
                 anchor_ego_state,
                 future_tracked_objects_array_list,
