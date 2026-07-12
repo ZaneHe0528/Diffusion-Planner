@@ -13,3 +13,8 @@ checkpoints/
 dataset
 *.csv
 nuplan-devkit
+# 实验输出（不入库）
+0hzxcode/gate_output/
+0hzxcode/m_probe_output/
+0hzxcode/gate_v2_output/val14_closedloop/frames.jsonl
+*.npz
