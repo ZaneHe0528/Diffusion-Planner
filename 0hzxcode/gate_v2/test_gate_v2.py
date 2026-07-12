@@ -112,6 +112,46 @@ def test_ego_shift_and_renoise():
     assert torch.allclose(out, mean)
 
 
+def test_ego_shift_rotates_global_translation_into_current_frame():
+    trajectory = torch.tensor([[[0.0, 0.0, 1.0, 0.0]]])
+    prev = torch.tensor([[0.0, 0.0, np.pi / 2]], dtype=torch.float32)
+    cur = torch.tensor([[1.0, 0.0, np.pi / 2]], dtype=torch.float32)
+
+    shifted = ego_shift_trajectory(trajectory, prev, cur).reshape(1, 1, 1, 4)
+
+    # The current anchor moved +1m along global x. In a frame facing global +y,
+    # that displacement is +1m along local y for the stationary old origin.
+    assert torch.allclose(shifted[0, 0, 0, :2], torch.tensor([0.0, 1.0]), atol=1e-6)
+
+
+def test_build_warmstart_rolls_cached_trajectory_forward_one_tick():
+    cache = WarmStartCache()
+    normalizer = _state_normalizer(p=1)
+    physical = torch.tensor(
+        [[[[0.0, 0.0, 1.0, 0.0],
+           [1.0, 0.0, 1.0, 0.0],
+           [2.0, 0.0, 1.0, 0.0],
+           [3.0, 0.0, 1.0, 0.0]]]]
+    )
+    cache.x0_norm = normalizer(physical).reshape(1, 1, -1)
+    cache.anchor_xyh = torch.zeros(1, 3)
+    current = torch.tensor([[[0.0, 0.0, 1.0, 0.0]]])
+
+    _, ref = build_warmstart_init(
+        cache,
+        current,
+        torch.zeros(1, 3),
+        t_start=0.2,
+        future_len=3,
+        state_normalizer=normalizer,
+    )
+
+    ref_future_phys = normalizer.inverse(ref.reshape(1, 1, 4, 4)[:, :, 1:])
+    # Old point 2 becomes the first future point after one 0.1s planner tick;
+    # the final point is linearly extrapolated to preserve the horizon length.
+    assert torch.allclose(ref_future_phys[0, 0, :, 0], torch.tensor([2.0, 3.0, 4.0]), atol=1e-6)
+
+
 def test_normalized_shift_uses_physical_units():
     cache = WarmStartCache()
     normalizer = _state_normalizer(p=1)
@@ -215,6 +255,8 @@ if __name__ == "__main__":
     test_neighbor_bump()
     test_planner_batched_gate_input_shape()
     test_ego_shift_and_renoise()
+    test_ego_shift_rotates_global_translation_into_current_frame()
+    test_build_warmstart_rolls_cached_trajectory_forward_one_tick()
     test_normalized_shift_uses_physical_units()
     test_constant_velocity_uses_raw_units_then_normalizes()
     test_build_warmstart_init()

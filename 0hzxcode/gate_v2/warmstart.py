@@ -50,8 +50,12 @@ def ego_shift_trajectory(
     dh = torch.atan2(torch.sin(dh), torch.cos(dh))
 
     xy = x[..., :2]
-    trans = torch.stack([dx, dy], dim=-1).view(b, 1, 1, 2)
-    xy_shift = _rotate_xy(xy + trans, dh.view(b, 1, 1))
+    xy_rotated = _rotate_xy(xy, dh.view(b, 1, 1))
+    # `xy` is expressed in the previous ego frame, while the anchor delta is
+    # global. Express the delta in the current ego frame before adding it.
+    anchor_delta_global = torch.stack([dx, dy], dim=-1)
+    anchor_delta_current = _rotate_xy(anchor_delta_global, -cur_anchor_xyh[:, 2])
+    xy_shift = xy_rotated + anchor_delta_current.view(b, 1, 1, 2)
     cos_h = x[..., 2]
     sin_h = x[..., 3]
     new_cos = cos_h * torch.cos(dh).view(b, 1, 1) - sin_h * torch.sin(dh).view(b, 1, 1)
@@ -60,6 +64,52 @@ def ego_shift_trajectory(
 
     if len(orig_shape) == 3:
         return out.reshape(b, p, -1)
+    return out
+
+
+def roll_trajectory_forward(trajectory: torch.Tensor, steps: int = 1) -> torch.Tensor:
+    """Advance a cached trajectory in time while preserving its point count.
+
+    Existing points move left by `steps`. Each new tail point linearly
+    extrapolates xy and extrapolates heading by the wrapped last angle delta.
+    """
+    orig_shape = trajectory.shape
+    if trajectory.dim() == 3 and orig_shape[-1] % 4 == 0:
+        b, p, flat = trajectory.shape
+        x = trajectory.reshape(b, p, flat // 4, 4)
+    else:
+        x = trajectory
+
+    out = x.clone()
+    for _ in range(max(int(steps), 0)):
+        if out.shape[2] <= 1:
+            break
+
+        prev = out[:, :, -2]
+        last = out[:, :, -1]
+        next_xy = last[..., :2] + (last[..., :2] - prev[..., :2])
+
+        prev_cos, prev_sin = prev[..., 2], prev[..., 3]
+        last_cos, last_sin = last[..., 2], last[..., 3]
+        prev_valid = torch.hypot(prev_cos, prev_sin) > 1e-6
+        last_valid = torch.hypot(last_cos, last_sin) > 1e-6
+        heading_valid = prev_valid & last_valid
+        delta_heading = torch.atan2(
+            last_sin * prev_cos - last_cos * prev_sin,
+            last_cos * prev_cos + last_sin * prev_sin,
+        )
+        last_heading = torch.atan2(last_sin, last_cos)
+        next_heading = last_heading + delta_heading
+        next_cos = torch.where(heading_valid, torch.cos(next_heading), last_cos)
+        next_sin = torch.where(heading_valid, torch.sin(next_heading), last_sin)
+        next_point = torch.stack(
+            [next_xy[..., 0], next_xy[..., 1], next_cos, next_sin],
+            dim=-1,
+        )
+        out = torch.cat([out[:, :, 1:], next_point.unsqueeze(2)], dim=2)
+
+    if len(orig_shape) == 3:
+        return out.reshape(orig_shape)
     return out
 
 
@@ -104,8 +154,10 @@ def ego_shift_normalized_trajectory(
     state_normalizer,
     prev_slot: int,
     cur_slot: int,
+    roll_steps: int = 0,
 ) -> torch.Tensor:
     x0_phys = denormalize_slot_trajectory(x0_norm, state_normalizer, prev_slot)
+    x0_phys = roll_trajectory_forward(x0_phys, steps=roll_steps)
     shifted_phys = ego_shift_trajectory(x0_phys, prev_anchor_xyh, cur_anchor_xyh)
     return normalize_slot_trajectory(shifted_phys, state_normalizer, cur_slot)
 
@@ -172,6 +224,7 @@ def build_neighbor_x0_row(
             state_normalizer,
             prev_slot=prev_row,
             cur_slot=slot,
+            roll_steps=1,
         )
 
     if neighbor_agents_past is not None and state_normalizer is not None:
@@ -211,6 +264,7 @@ def build_warmstart_init(
         state_normalizer,
         prev_slot=0,
         cur_slot=0,
+        roll_steps=1,
     )
     rows = [ego_shifted]
     for slot in range(1, p):
