@@ -1,0 +1,34 @@
+INFO:__main__:Global seed set to 0
+INFO:nuplan.planning.script.builders.main_callback_builder:Building MultiMainCallback...
+INFO:nuplan.planning.script.builders.main_callback_builder:Building MultiMainCallback: 3...DONE!
+2026-07-13 08:15:24,332 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/worker_pool_builder.py:19}  Building WorkerPool...
+2026-07-13 08:15:24,334 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/utils/multithreading/worker_pool.py:101}  Worker: Sequential
+2026-07-13 08:15:24,334 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/utils/multithreading/worker_pool.py:102}  Number of nodes: 1
+Number of CPUs per node: 1
+Number of GPUs per node: 0
+Number of threads across all nodes: 1
+2026-07-13 08:15:24,334 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/worker_pool_builder.py:27}  Building WorkerPool...DONE!
+2026-07-13 08:15:24,334 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/folder_builder.py:32}  Building experiment folders...
+2026-07-13 08:15:24,334 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/folder_builder.py:35}  
+
+	Folder where all results are stored: /home/ubuntu/code/hezexiang/Diffusion-Planner/exp/exp/simulation/closed_loop_nonreactive_agents/diffusion_planner/val14_gate_warmstart/diffusion_planner_release/model_2026-07-13-08-15-15
+
+2026-07-13 08:15:24,335 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/folder_builder.py:70}  Building experiment folders...DONE!
+2026-07-13 08:15:24,335 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/simulation_callback_builder.py:52}  Building AbstractCallback...
+2026-07-13 08:15:24,335 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/simulation_callback_builder.py:68}  Building AbstractCallback: 0...DONE!
+2026-07-13 08:15:24,335 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/simulation_builder.py:47}  Building simulations...
+2026-07-13 08:15:24,335 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/simulation_builder.py:53}  Extracting scenarios...
+2026-07-13 08:15:24,335 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/common/utils/distributed_scenario_filter.py:83}  Building Scenarios in mode DistributedMode.SINGLE_NODE
+2026-07-13 08:15:24,335 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/scenario_building_builder.py:18}  Building AbstractScenarioBuilder...
+2026-07-13 08:15:24,366 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/scenario_building_builder.py:21}  Building AbstractScenarioBuilder...DONE!
+2026-07-13 08:15:24,366 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/scenario_filter_builder.py:35}  Building ScenarioFilter...
+2026-07-13 08:15:24,415 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/scenario_filter_builder.py:44}  Building ScenarioFilter...DONE!
+2026-07-13 08:15:41,790 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/simulation_builder.py:74}  Building metric engines...
+2026-07-13 08:15:41,905 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/simulation_builder.py:76}  Building metric engines...DONE
+2026-07-13 08:15:41,905 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/simulation_builder.py:80}  Building simulations from 1118 scenarios...
+2026-07-13 08:15:48,224 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/builders/simulation_builder.py:133}  Building simulations...DONE!
+2026-07-13 08:15:48,224 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/run_simulation.py:93}  Running simulation...
+2026-07-13 08:15:48,224 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/script/utils.py:138}  Executing runners...
+2026-07-13 08:15:48,224 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/simulation/runner/executor.py:82}  Starting 1118 simulations using Sequential!
+2026-07-13 08:15:48,224 INFO {/home/ubuntu/code/hezexiang/Diffusion-Planner/nuplan-devkit/nuplan/planning/utils/multithreading/worker_pool.py:116}  Submitting 1118 tasks!
+Sequential:   0%|          | 0/1118 [00:00<?, ?it/s]Sequential:   0%|          | 1/1118 [00:20<6:14:42, 20.13s/it]Sequential:   0%|          | 2/1118 [00:31<4:43:46, 15.26s/it]Sequential:   0%|          | 3/1118 [00:56<6:02:20, 19.50s/it]Sequential:   0%|          | 4/1118 [01:12<5:33:58, 17.99s/it]Sequential:   0%|          | 5/1118 [01:27<5:13:51, 16.92s/it]Sequential:   1%|          | 6/1118 [01:50<5:52:17, 19.01s/it]Sequential:   1%|          | 7/1118 [02:17<6:44:13, 21.83s/it]
